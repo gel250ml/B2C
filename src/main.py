@@ -3,8 +3,18 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from src.database.init_db import init_db
 
+from src.database.init_db import init_db
+from src.routes.address_router import router as address_router
+from src.routes.auth_router import router as auth_router
+from src.routes.b2b_event_router import router as b2b_event_router
+from src.routes.buyer_router import router as buyer_router
+from src.routes.cart_router import router as cart_router
+from src.routes.catalog_router import router as catalog_router
+from src.routes.favorite_router import router as favorite_router
+from src.routes.notification_router import router as notification_router
+from src.routes.order_router import router as order_router
+from src.routes.payment_method_router import router as payment_method_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,3 +57,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+app.include_router(address_router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(b2b_event_router, prefix="/api/v1")
+app.include_router(buyer_router, prefix="/api/v1")
+app.include_router(cart_router, prefix="/api/v1")
+app.include_router(catalog_router, prefix="/api/v1")
+app.include_router(favorite_router, prefix="/api/v1")
+app.include_router(notification_router, prefix="/api/v1")
+app.include_router(order_router, prefix="/api/v1")
+app.include_router(payment_method_router, prefix="/api/v1")
