@@ -16,13 +16,60 @@ from src.routes.notification_router import router as notification_router
 from src.routes.order_router import router as order_router
 from src.routes.payment_method_router import router as payment_method_router
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     yield
 
 
-app = FastAPI(lifespan=lifespan)
+tags_metadata = [
+    {
+        "name": "Auth",
+        "description": "Регистрация и аутентификация покупателей",
+    },
+    {
+        "name": "Buyer",
+        "description": "Профиль покупателя",
+    },
+    {
+        "name": "Addresses",
+        "description": "Адреса доставки",
+    },
+    {
+        "name": "PaymentMethods",
+        "description": "Платёжные методы (моки)",
+    },
+    {
+        "name": "Catalog",
+        "description": "Каталог товаров (проксируется из B2B)",
+    },
+    {
+        "name": "Cart",
+        "description": "Корзина (гость + авторизованный)",
+    },
+    {
+        "name": "Favorites",
+        "description": "Избранное и подписки на товары",
+    },
+    {
+        "name": "Orders",
+        "description": "Заказы покупателя",
+    },
+    {
+        "name": "Notifications",
+        "description": "Уведомления и подписки",
+    },
+    {
+        "name": "B2B Events",
+        "description": "Приём событий от B2B-сервиса (служебный канал)",
+    },
+]
+
+app = FastAPI(
+    lifespan=lifespan,
+    openapi_tags=tags_metadata,
+)
 
 
 @app.exception_handler(HTTPException)
@@ -40,6 +87,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         content={"detail": exc.detail},
     )
 
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     return JSONResponse(
@@ -50,6 +98,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         },
     )
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=['*'],
@@ -58,14 +107,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-app.include_router(address_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
-app.include_router(b2b_event_router, prefix="/api/v1")
 app.include_router(buyer_router, prefix="/api/v1")
-app.include_router(cart_router, prefix="/api/v1")
-app.include_router(catalog_router, prefix="/api/v1")
-app.include_router(favorite_router, prefix="/api/v1")
-app.include_router(notification_router, prefix="/api/v1")
-app.include_router(order_router, prefix="/api/v1")
+app.include_router(address_router, prefix="/api/v1")
 app.include_router(payment_method_router, prefix="/api/v1")
+app.include_router(catalog_router, prefix="/api/v1")
+app.include_router(cart_router, prefix="/api/v1")
+app.include_router(favorite_router, prefix="/api/v1")
+app.include_router(order_router, prefix="/api/v1")
+app.include_router(notification_router, prefix="/api/v1")
+app.include_router(b2b_event_router, prefix="/api/v1")

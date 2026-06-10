@@ -6,7 +6,7 @@ from src.services.favorite_service import FavoriteService
 
 router = APIRouter(
     prefix="/favorites",
-    tags=["/favorites"],
+    tags=["Favorites"],
 )
 
 @router.get(

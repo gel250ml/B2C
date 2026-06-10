@@ -6,7 +6,7 @@ from src.services.buyer_service import BuyerService
 
 router = APIRouter(
     prefix="/buyers/me",
-    tags=["buyers/me"],
+    tags=["Buyer"],
 )
 
 @router.get(

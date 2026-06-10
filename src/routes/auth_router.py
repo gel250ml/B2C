@@ -6,7 +6,7 @@ from src.services.auth_service import AuthService
 
 router = APIRouter(
     prefix="/auth",
-    tags=["auth"],
+    tags=["Auth"],
 )
 
 @router.post(

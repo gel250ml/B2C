@@ -6,7 +6,7 @@ from src.services.cart_service import CartService
 
 router = APIRouter(
     prefix="/cart",
-    tags=["/cart"],
+    tags=["Cart"],
 )
 
 

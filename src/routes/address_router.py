@@ -6,7 +6,7 @@ from src.services.address_service import AddressService
 
 router = APIRouter(
     prefix="/buyers/me/addresses",
-    tags=["/buyers/me/addresses"],
+    tags=["Addresses"],
 )
 
 @router.get(

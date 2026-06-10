@@ -6,7 +6,7 @@ from src.services.b2b_event_service import B2bEventService
 
 router = APIRouter(
     prefix="/b2b/events",
-    tags=["/b2b/events"],
+    tags=["B2B Events"],
 )
 
 @router.post(

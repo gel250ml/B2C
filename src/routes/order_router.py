@@ -6,7 +6,7 @@ from src.services.order_service import OrderService
 
 router = APIRouter(
     prefix="/orders",
-    tags=["/orders"],
+    tags=["Orders"],
 )
 
 @router.get(

@@ -6,7 +6,7 @@ from src.services.catalog_service import CatalogService
 
 router = APIRouter(
     prefix="/catalog",
-    tags=["/catalog"],
+    tags=["Catalog"],
 )
 
 @router.get(

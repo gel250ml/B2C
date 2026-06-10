@@ -6,7 +6,7 @@ from src.services.notification_service import NotificationService
 
 router = APIRouter(
     prefix="/notifications",
-    tags=["/notifications"],
+    tags=["Notifications"],
 )
 
 @router.get(

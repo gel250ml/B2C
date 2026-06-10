@@ -6,7 +6,7 @@ from src.services.payment_method_service import PaymentMethodService
 
 router = APIRouter(
     prefix="/buyers/me/payment-methods",
-    tags=["/buyers/me/payment-methods"],
+    tags=["PaymentMethods"],
 )
 
 @router.get(
