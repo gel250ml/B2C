@@ -1,9 +1,9 @@
+from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx
 import pytest
 import pytest_asyncio
-from types import SimpleNamespace
 
 from src.database.dependencies import get_db
 from src.main import app
@@ -58,17 +58,44 @@ async def async_client():
 
 
 def build_product_payload(product_id: str, status: str = "MODERATED", deleted: bool = False):
+    category_id = str(uuid4())
+    seller_id = str(uuid4())
     return {
         "id": product_id,
         "slug": "iphone-15-pro-max",
         "title": "iPhone 15 Pro Max",
         "description": "Флагманский смартфон Apple 2024 года с чипом A17 Pro",
-        "images": [
-            {"url": "https://cdn.example.com/iphone-front.jpg", "ordering": 0},
-            {"url": "https://cdn.example.com/iphone-back.jpg", "ordering": 1},
-        ],
         "status": status,
         "deleted": deleted,
+        "category": {
+            "id": category_id,
+            "name": "Смартфоны",
+            "parent_id": None,
+            "level": 1,
+            "path": ["Электроника", "Смартфоны"],
+        },
+        "rating": 5,
+        "reviews_count": 12,
+        "images": [
+            {
+                "id": str(uuid4()),
+                "url": "https://cdn.example.com/iphone-front.jpg",
+                "alt": "iPhone front",
+                "ordering": 0,
+                "is_main": True,
+            },
+            {
+                "id": str(uuid4()),
+                "url": "https://cdn.example.com/iphone-back.jpg",
+                "alt": "iPhone back",
+                "ordering": 1,
+                "is_main": False,
+            },
+        ],
+        "seller": {
+            "id": seller_id,
+            "display_name": "Apple Store",
+        },
         "characteristics": [
             {"name": "Бренд", "value": "Apple"},
             {"name": "Страна-производитель", "value": "Китай"},
@@ -77,6 +104,7 @@ def build_product_payload(product_id: str, status: str = "MODERATED", deleted: b
             {
                 "id": str(uuid4()),
                 "name": "256GB Black",
+                "sku_code": "IPHONE15-BLACK-256",
                 "price": 12999000,
                 "discount": 0,
                 "image": "/s3/iphone15-black-256.jpg",
@@ -91,6 +119,7 @@ def build_product_payload(product_id: str, status: str = "MODERATED", deleted: b
             {
                 "id": str(uuid4()),
                 "name": "256GB White",
+                "sku_code": "IPHONE15-WHITE-256",
                 "price": 12999000,
                 "discount": 500000,
                 "image": "/s3/iphone15-white-256.jpg",
@@ -116,14 +145,24 @@ async def test_product_card_returns_full_data_with_skus(async_client):
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == str(product_id)
+    assert data["name"] == "iPhone 15 Pro Max"
     assert data["slug"] == "iphone-15-pro-max"
-    assert data["title"] == "iPhone 15 Pro Max"
-    assert data["description"]
+    assert data["category"]["name"] == "Смартфоны"
+    assert data["min_price"] == 12499000
+    assert data["old_price"] == 12999000
+    assert data["has_stock"] is True
+    assert data["rating"] == 5
+    assert data["reviews_count"] == 12
     assert len(data["images"]) == 2
-    assert data["characteristics"][0] == {"name": "Бренд", "value": "Apple"}
+    assert data["seller"]["display_name"] == "Apple Store"
+    assert data["description"]
+    assert data["attributes"]["Бренд"] == "Apple"
     assert len(data["skus"]) == 2
     assert data["skus"][0]["price"] == 12999000
-    assert data["skus"][1]["discount"] == 500000
+    assert data["skus"][1]["price"] == 12499000
+    assert data["skus"][1]["old_price"] == 12999000
+    assert data["skus"][0]["available_quantity"] == 10
+    assert data["skus"][0]["attributes"]["Цвет"] == "Чёрный"
     assert MockB2BClient.requested_url == f"/api/v1/products/{product_id}"
 
 
@@ -159,6 +198,6 @@ async def test_sku_without_stock_is_shown_as_unavailable(async_client):
 
     assert response.status_code == 200
     data = response.json()
-    assert data["skus"][1]["active_quantity"] == 0
-    assert data["skus"][1]["in_stock"] is False
-    assert data["skus"][0]["in_stock"] is True
+    assert data["has_stock"] is True
+    assert data["skus"][1]["available_quantity"] == 0
+    assert data["skus"][0]["available_quantity"] == 10
