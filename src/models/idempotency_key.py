@@ -6,6 +6,7 @@ from sqlalchemy import (
     Uuid,
 )
 from sqlalchemy.sql import func
+from sqlalchemy import JSON
 from sqlalchemy.dialects.postgresql import JSONB
 
 from src.database.base import Base
@@ -18,7 +19,7 @@ class IdempotencyKey(Base):
     scope = Column(String(50), nullable=False, )
     key = Column(Uuid(as_uuid=True), nullable=False, unique=True, )
     request_hash = Column(String(64), nullable=False, )
-    response = Column(JSONB, nullable=True, )
+    response = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True, )
 
     expires_at = Column(DateTime, nullable=False, )
     created_at = Column(DateTime, server_default=func.now(), )

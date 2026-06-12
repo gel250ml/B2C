@@ -8,6 +8,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.sql import func
+from sqlalchemy import JSON
 from sqlalchemy.dialects.postgresql import JSONB
 
 from src.database.base import Base
@@ -19,7 +20,7 @@ class B2BEvent(Base):
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4, )
     event_type = Column(String(50), nullable=False, )
     idempotency_key = Column(Uuid(as_uuid=True), nullable=False, )
-    payload = Column(JSONB, nullable=False, )
+    payload = Column(JSON().with_variant(JSONB, "postgresql"), nullable=False, )
     occurred_at = Column(DateTime, nullable=False, )
     processed = Column(Boolean, nullable=False, default=False, )
 
