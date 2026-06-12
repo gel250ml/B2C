@@ -47,5 +47,7 @@ class Order(Base):
     delivered_at = Column(DateTime)
 
     buyer = relationship("Buyer", back_populates="orders", )
+    address = relationship("Address", )
+    payment_method = relationship("PaymentMethod", )
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan", )
     status_history = relationship("OrderStatusHistory", back_populates="order", cascade="all, delete-orphan", )
