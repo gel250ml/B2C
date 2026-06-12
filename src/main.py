@@ -77,10 +77,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     if isinstance(exc.detail, dict) and "code" in exc.detail and "message" in exc.detail:
         return JSONResponse(
             status_code=exc.status_code,
-            content={
-                "code": exc.detail["code"],
-                "message": exc.detail["message"],
-            },
+            content=exc.detail,
         )
     return JSONResponse(
         status_code=exc.status_code,

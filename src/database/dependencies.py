@@ -64,6 +64,36 @@ async def get_current_seller_id(
     return _seller_id_from_authorization(authorization)
 
 
+def _buyer_id_from_authorization(authorization: str | None) -> UUID:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "UNAUTHORIZED", "message": "Authorization token must be Bearer"},
+        )
+
+    payload = _decode_jwt_payload(authorization.split(" ", 1)[1])
+    buyer_id = payload.get("buyer_id") or payload.get("sub")
+    if buyer_id is None:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "UNAUTHORIZED", "message": "buyer_id is missing from JWT claims"},
+        )
+
+    try:
+        return UUID(str(buyer_id))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "UNAUTHORIZED", "message": "buyer_id claim must be UUID"},
+        )
+
+
+async def get_current_buyer_id(
+    authorization: str = Header(..., alias="Authorization"),
+) -> UUID:
+    return _buyer_id_from_authorization(authorization)
+
+
 async def get_product_access_context(
     authorization: str | None = Header(None, alias="Authorization"),
     x_service_key: str | None = Header(None, alias="X-Service-Key"),
