@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Uuid,
+    JSON,
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -23,7 +24,7 @@ class Notification(Base):
     type = Column(String(50), nullable=False, )
     title = Column(String(255), nullable=False, )
     body = Column(Text, nullable=True, )
-    payload = Column(JSONB, nullable=True, )
+    payload = Column(JSON().with_variant(JSONB, "postgresql"), nullable=True, )
     is_read = Column(Boolean, nullable=False, default=False, )
 
     created_at = Column(DateTime, server_default=func.now(), )
