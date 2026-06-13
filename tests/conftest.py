@@ -41,6 +41,36 @@ def seller_id() -> UUID:
 def other_seller_id() -> UUID:
     return uuid4()
 
+@pytest.fixture
+def buyer_id() -> UUID:
+    return uuid4()
+
+def create_buyer_jwt_token(buyer_id: UUID) -> str:
+    header = {"alg": "HS256", "typ": "JWT"}
+    payload = {
+        "buyer_id": str(buyer_id),
+        "sub": str(buyer_id),
+    }
+
+    header_b64 = (
+        base64.urlsafe_b64encode(json.dumps(header).encode())
+        .decode()
+        .rstrip("=")
+    )
+
+    payload_b64 = (
+        base64.urlsafe_b64encode(json.dumps(payload).encode())
+        .decode()
+        .rstrip("=")
+    )
+
+    signature = (
+        base64.urlsafe_b64encode(b"signature")
+        .decode()
+        .rstrip("=")
+    )
+
+    return f"{header_b64}.{payload_b64}.{signature}"
 
 def create_jwt_token(seller_id: UUID) -> str:
     header = {"alg": "HS256", "typ": "JWT"}
