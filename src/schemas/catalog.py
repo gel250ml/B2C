@@ -61,3 +61,44 @@ class ProductCardResponse(BaseModel):
     skus: list[ProductSkuResponse] = []
 
     model_config = ConfigDict(extra="ignore")
+
+
+class CatalogProductListItemResponse(BaseModel):
+    id: UUID
+    title: str
+    image: str | None = None
+    price: int
+    in_stock: bool
+    is_in_cart: bool = False
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class PaginatedCatalogProductsResponse(BaseModel):
+    items: list[CatalogProductListItemResponse]
+    total_count: int
+    limit: int
+    offset: int
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class FacetValueResponse(BaseModel):
+    value: str
+    count: int
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class CatalogFacetResponse(BaseModel):
+    name: str
+    values: list[FacetValueResponse]
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class CatalogFacetsResponse(BaseModel):
+    category_id: UUID | None = None
+    facets: list[CatalogFacetResponse]
+
+    model_config = ConfigDict(extra="ignore")
