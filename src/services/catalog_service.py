@@ -67,7 +67,7 @@ class CatalogService:
         product_id: UUID,
         limit: int,
     ) -> list[CatalogProductListItemResponse]:
-        product = await self._get_visible_product_payload(product_id)
+        product = await self.get_visible_product_payload(product_id)
         category_id = self._product_category_id(product)
         if category_id is None:
             return []
@@ -85,7 +85,7 @@ class CatalogService:
         return self._exclude_current_product(items, product_id, limit)
 
     async def get_product_card(self, product_id: UUID) -> ProductCardResponse:
-        product = await self._get_visible_product_payload(product_id)
+        product = await self.get_visible_product_payload(product_id)
 
         skus = [self._build_public_sku(sku) for sku in product.get("skus", [])]
         prices = [sku.price for sku in skus]
@@ -138,7 +138,7 @@ class CatalogService:
 
         return response.json()
 
-    async def _get_visible_product_payload(self, product_id: UUID) -> dict[str, Any]:
+    async def get_visible_product_payload(self, product_id: UUID) -> dict[str, Any]:
         try:
             async with httpx.AsyncClient(base_url=B2B_URL, timeout=5.0) as client:
                 response = await client.get(f"/api/v1/products/{product_id}", headers=self._headers())
