@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.dependencies import get_db
@@ -49,16 +49,27 @@ async def get_catalog_products(
     request: Request,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    q: str | None = Query(None, max_length=200),
+    search: str | None = Query(None),
     sort: str = Query(DEFAULT_CATALOG_SORT),
     db: AsyncSession = Depends(get_db),
 ) -> PaginatedCatalogProductsResponse:
+    if search is not None:
+        if len(search) < 3:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "INVALID_REQUEST", "message": "Search query must be at least 3 characters"},
+            )
+        if len(search) > 255:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "INVALID_REQUEST", "message": "Search query must be at most 255 characters"},
+            )
     service = CatalogService(db)
     return await service.get_products(
         query_params=request.query_params,
         limit=limit,
         offset=offset,
-        q=q,
+        q=search,
         sort=sort,
     )
 
