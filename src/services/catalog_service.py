@@ -124,12 +124,12 @@ class CatalogService:
         return response.json()
 
     def _build_catalog_query(
-        self,
-        query_params: QueryParams,
-        limit: int,
-        offset: int,
-        q: str | None,
-        sort: str,
+            self,
+            query_params: QueryParams,
+            limit: int,
+            offset: int,
+            q: str | None,
+            sort: str,
     ) -> list[tuple[str, str]]:
         query: list[tuple[str, str]] = [
             ("limit", str(limit)),
@@ -137,7 +137,7 @@ class CatalogService:
             ("sort", sort),
         ]
         if q:
-            query.append(("q", q))
+            query.append(("search", q))  # B2B ждёт search, не q
 
         category_id = self._extract_category_id(query_params)
         if category_id:
