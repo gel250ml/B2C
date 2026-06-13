@@ -131,7 +131,7 @@ class CatalogService:
         resolved_product_id = None
         resolved_category_id = category_id
         if product_id is not None:
-            product = await self._get_visible_product_payload(product_id)
+            product = await self.get_visible_product_payload(product_id)
             raw_category_id = self._product_category_id(product)
             if raw_category_id is None:
                 self._raise_orphan_node()
@@ -538,7 +538,7 @@ class CatalogService:
             response_limit = self._to_int(payload.get("limit", limit))
             response_offset = self._to_int(payload.get("offset", offset))
 
-        items = [self._build_catalog_product_item(item) for item in raw_items if isinstance(item, dict)]
+        items = [self.build_catalog_product_item(item) for item in raw_items if isinstance(item, dict)]
         return PaginatedCatalogProductsResponse(
             items=items,
             total_count=total_count,
@@ -546,7 +546,7 @@ class CatalogService:
             offset=response_offset,
         )
 
-    def _build_catalog_product_item(self, product: dict[str, Any]) -> CatalogProductListItemResponse:
+    def build_catalog_product_item(self, product: dict[str, Any]) -> CatalogProductListItemResponse:
         return CatalogProductListItemResponse(
             id=product["id"],
             title=product.get("title") or product.get("name") or "",
