@@ -11,6 +11,7 @@ from src.routes.b2b_event_router import router as b2b_event_router
 from src.routes.buyer_router import router as buyer_router
 from src.routes.cart_router import router as cart_router
 from src.routes.catalog_router import router as catalog_router
+from src.routes.category_navigation_router import router as category_navigation_router
 from src.routes.favorite_router import router as favorite_router
 from src.routes.notification_router import router as notification_router
 from src.routes.order_router import router as order_router
@@ -74,7 +75,7 @@ app = FastAPI(
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    if isinstance(exc.detail, dict) and "code" in exc.detail and "message" in exc.detail:
+    if isinstance(exc.detail, dict) and "message" in exc.detail and ("code" in exc.detail or "error" in exc.detail):
         return JSONResponse(
             status_code=exc.status_code,
             content=exc.detail,
@@ -109,6 +110,7 @@ app.include_router(buyer_router, prefix="/api/v1")
 app.include_router(address_router, prefix="/api/v1")
 app.include_router(payment_method_router, prefix="/api/v1")
 app.include_router(catalog_router, prefix="/api/v1")
+app.include_router(category_navigation_router, prefix="/api/v1")
 app.include_router(cart_router, prefix="/api/v1")
 app.include_router(favorite_router, prefix="/api/v1")
 app.include_router(order_router, prefix="/api/v1")

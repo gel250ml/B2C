@@ -1,12 +1,13 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request, HTTPException
+from fastapi import APIRouter, Depends, Query, Request, Response, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.dependencies import get_db
 from src.schemas.catalog import (
     CatalogFacetsResponse,
     CatalogProductListItemResponse,
+    CategoryTreeNodeResponse,
     PaginatedCatalogProductsResponse,
     ProductCardResponse,
 )
@@ -23,6 +24,16 @@ async def get_categories(
     db: AsyncSession = Depends(get_db),
 ) -> None:
     return None
+
+
+@router.get("/categories/tree", response_model=list[CategoryTreeNodeResponse])
+async def get_categories_tree(
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+) -> list[CategoryTreeNodeResponse]:
+    service = CatalogService(db)
+    response.headers["Cache-Control"] = "max-age=3600"
+    return await service.get_categories_tree()
 
 
 @router.get(

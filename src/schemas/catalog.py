@@ -14,6 +14,82 @@ class CatalogCategoryResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class CategoryTreeNodeResponse(BaseModel):
+    id: UUID
+    name: str
+    parent_id: UUID | None = None
+    level: int = 0
+    path: list[str] = []
+    children: list["CategoryTreeNodeResponse"] = []
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class CategoryTreeResponse(BaseModel):
+    items: list[CategoryTreeNodeResponse]
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class CategoryParentResponse(BaseModel):
+    id: UUID
+    name: str
+    slug: str | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class CategorySeoResponse(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    keywords: list[str] = []
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class CategoryDetailResponse(BaseModel):
+    id: UUID
+    name: str
+    slug: str | None = None
+    description: str | None = None
+    parent: CategoryParentResponse | None = None
+    product_count: int | None = None
+    seo: CategorySeoResponse | dict[str, Any] | None = None
+    meta_tags: dict[str, Any] = {}
+    image_url: str | None = None
+    is_active: bool = True
+    created_at: str | None = None
+    updated_at: str | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class BreadcrumbItemResponse(BaseModel):
+    id: UUID
+    slug: str | None = None
+    name: str
+    url: str
+    level: int
+    is_current: bool
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class BreadcrumbsMetaResponse(BaseModel):
+    resolved_via: str
+    category_id: UUID
+    product_id: UUID | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class BreadcrumbsResponse(BaseModel):
+    data: list[BreadcrumbItemResponse]
+    meta: BreadcrumbsMetaResponse
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class CatalogImageResponse(BaseModel):
     id: UUID | None = None
     url: str

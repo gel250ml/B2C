@@ -17,3 +17,5 @@ B2C_URL = os.getenv("B2C_URL")
 
 B2B_URL = os.getenv("B2B_URL", "http://localhost:8000")
 B2C_TO_B2B_KEY = os.getenv("B2C_TO_B2B_KEY")
+
+B2B_CATEGORIES_PATH = os.getenv("B2B_CATEGORIES_PATH", "/api/v1/categories")
