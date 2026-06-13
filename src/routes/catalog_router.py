@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.dependencies import get_db
 from src.schemas.catalog import (
     CatalogFacetsResponse,
+    CatalogProductListItemResponse,
     PaginatedCatalogProductsResponse,
     ProductCardResponse,
 )
@@ -89,6 +90,19 @@ async def get_catalog_facets(
 ) -> CatalogFacetsResponse:
     service = CatalogService(db)
     return await service.get_facets(request.query_params, sort=sort)
+
+
+@router.get(
+    "/products/{product_id}/similar",
+    response_model=list[CatalogProductListItemResponse],
+)
+async def get_similar_products(
+    product_id: UUID,
+    limit: int = Query(10, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+) -> list[CatalogProductListItemResponse]:
+    service = CatalogService(db)
+    return await service.get_similar_products(product_id, limit=limit)
 
 
 @router.get(

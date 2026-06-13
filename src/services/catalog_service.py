@@ -62,20 +62,30 @@ class CatalogService:
             category_id = self._extract_category_id(query_params)
         return self._build_facets_response(payload, category_id=category_id)
 
+    async def get_similar_products(
+        self,
+        product_id: UUID,
+        limit: int,
+    ) -> list[CatalogProductListItemResponse]:
+        product = await self._get_visible_product_payload(product_id)
+        category_id = self._product_category_id(product)
+        if category_id is None:
+            return []
+
+        payload = await self._get_b2b_json(
+            f"/api/v1/products/{product_id}/similar",
+            [
+                ("category", str(category_id)),
+                ("limit", str(limit)),
+                ("offset", "0"),
+            ],
+            not_found_message="Product not found",
+        )
+        items = self._build_products_response(payload, limit=limit, offset=0).items
+        return self._exclude_current_product(items, product_id, limit)
+
     async def get_product_card(self, product_id: UUID) -> ProductCardResponse:
-        headers = self._headers()
-
-        async with httpx.AsyncClient(base_url=B2B_URL, timeout=5.0) as client:
-            response = await client.get(f"/api/v1/products/{product_id}", headers=headers)
-
-        if response.status_code == 404:
-            raise NotFoundException("Product not found")
-
-        response.raise_for_status()
-        product = response.json()
-
-        if product.get("status") != "MODERATED" or product.get("deleted") is True:
-            raise NotFoundException("Product not found")
+        product = await self._get_visible_product_payload(product_id)
 
         skus = [self._build_public_sku(sku) for sku in product.get("skus", [])]
         prices = [sku.price for sku in skus]
@@ -98,7 +108,12 @@ class CatalogService:
             skus=skus,
         )
 
-    async def _get_b2b_json(self, path: str, query: list[tuple[str, str]]) -> dict[str, Any] | list[Any]:
+    async def _get_b2b_json(
+        self,
+        path: str,
+        query: list[tuple[str, str]],
+        not_found_message: str = "Category not found",
+    ) -> dict[str, Any] | list[Any]:
         url = self._build_url(path, query)
         try:
             async with httpx.AsyncClient(base_url=B2B_URL, timeout=5.0) as client:
@@ -118,10 +133,41 @@ class CatalogService:
         if response.status_code >= 400:
             raise HTTPException(
                 status_code=response.status_code,
-                detail=self._safe_error_payload(response),
+                detail=self._safe_error_payload(response, not_found_message=not_found_message),
             )
 
         return response.json()
+
+    async def _get_visible_product_payload(self, product_id: UUID) -> dict[str, Any]:
+        try:
+            async with httpx.AsyncClient(base_url=B2B_URL, timeout=5.0) as client:
+                response = await client.get(f"/api/v1/products/{product_id}", headers=self._headers())
+        except httpx.HTTPError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail={"code": "BAD_GATEWAY", "message": "B2B service unavailable"},
+            ) from exc
+
+        if response.status_code == 404:
+            raise NotFoundException("Product not found")
+
+        if response.status_code >= 500:
+            raise HTTPException(
+                status_code=502,
+                detail={"code": "BAD_GATEWAY", "message": "B2B service unavailable"},
+            )
+
+        if response.status_code >= 400:
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=self._safe_error_payload(response, not_found_message="Product not found"),
+            )
+
+        product = response.json()
+        if product.get("status") != "MODERATED" or product.get("deleted") is True:
+            raise NotFoundException("Product not found")
+
+        return product
 
     def _build_catalog_query(
         self,
@@ -274,6 +320,32 @@ class CatalogService:
         )
 
     @staticmethod
+    def _product_category_id(product: dict[str, Any]) -> str | None:
+        category = product.get("category")
+        if isinstance(category, dict) and category.get("id"):
+            return str(category["id"])
+        if product.get("category_id"):
+            return str(product["category_id"])
+        return None
+
+    @staticmethod
+    def _exclude_current_product(
+        items: list[CatalogProductListItemResponse],
+        product_id: UUID,
+        limit: int,
+    ) -> list[CatalogProductListItemResponse]:
+        result: list[CatalogProductListItemResponse] = []
+        seen_ids: set[UUID] = set()
+        for item in items:
+            if item.id == product_id or item.id in seen_ids:
+                continue
+            result.append(item)
+            seen_ids.add(item.id)
+            if len(result) >= limit:
+                break
+        return result
+
+    @staticmethod
     def _validate_sort(sort: str) -> None:
         if sort in ALLOWED_CATALOG_SORTS:
             return
@@ -294,7 +366,7 @@ class CatalogService:
         return f"{path}?{urlencode(query, safe='[]')}"
 
     @staticmethod
-    def _safe_error_payload(response: httpx.Response) -> dict[str, Any]:
+    def _safe_error_payload(response: httpx.Response, not_found_message: str = "Category not found") -> dict[str, Any]:
         try:
             payload = response.json()
         except ValueError:
@@ -304,7 +376,7 @@ class CatalogService:
             return payload
 
         if response.status_code == 404:
-            return {"code": "NOT_FOUND", "message": "Category not found"}
+            return {"code": "NOT_FOUND", "message": not_found_message}
 
         return {"code": "UPSTREAM_ERROR", "message": "B2B returned an error"}
 
