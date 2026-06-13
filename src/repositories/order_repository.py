@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.models import Order, OrderStatus, OrderStatusHistory
+from src.models import Address, Buyer, Order, OrderStatus, OrderStatusHistory, PaymentMethod
 
 
 class OrderRepository:
@@ -23,6 +23,39 @@ class OrderRepository:
                 selectinload(Order.payment_method),
             )
         )
+        return result.scalar_one_or_none()
+
+
+    async def get_by_idempotency_key(self, idempotency_key: UUID) -> Order | None:
+        result = await self.session.execute(
+            select(Order)
+            .where(Order.idempotency_key == idempotency_key)
+            .options(
+                selectinload(Order.items),
+                selectinload(Order.status_history),
+                selectinload(Order.address),
+                selectinload(Order.payment_method),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_address_for_buyer(self, address_id: UUID, buyer_id: UUID) -> Address | None:
+        result = await self.session.execute(
+            select(Address).where(Address.id == address_id, Address.buyer_id == buyer_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_payment_method_for_buyer(self, payment_method_id: UUID, buyer_id: UUID) -> PaymentMethod | None:
+        result = await self.session.execute(
+            select(PaymentMethod).where(
+                PaymentMethod.id == payment_method_id,
+                PaymentMethod.buyer_id == buyer_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_buyer(self, buyer_id: UUID) -> Buyer | None:
+        result = await self.session.execute(select(Buyer).where(Buyer.id == buyer_id))
         return result.scalar_one_or_none()
 
     async def get_cancel_pending_orders(self, limit: int = 100) -> list[Order]:

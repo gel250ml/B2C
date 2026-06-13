@@ -20,6 +20,7 @@ class B2BSkuData:
     product_deleted: bool
     product_blocked: bool
     image: dict[str, Any] | None
+    product_title: str | None = None
     found: bool = True
 
 
@@ -73,6 +74,7 @@ class B2BCatalogClient:
                     product_deleted=bool(product.get("deleted", False)),
                     product_blocked=bool(product.get("blocked", False)) or product.get("status") in {"BLOCKED", "HARD_BLOCKED"},
                     image=self._main_image(sku.get("images") or []) or sku.get("image") or main_product_image,
+                    product_title=product_name,
                 )
         return result
 
