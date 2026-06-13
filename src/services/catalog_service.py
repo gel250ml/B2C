@@ -7,12 +7,20 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.datastructures import QueryParams
 
-from src.core.config import B2B_URL, B2C_TO_B2B_KEY
+from src.core.config import B2B_CATEGORIES_PATH, B2B_URL, B2C_TO_B2B_KEY
 from src.core.exceptions import NotFoundException, ValidationException
 from src.repositories.catalog_repository import CatalogRepository
 from src.schemas.catalog import (
+    BreadcrumbItemResponse,
+    BreadcrumbsMetaResponse,
+    BreadcrumbsResponse,
+    CatalogCategoryResponse,
     CatalogFacetsResponse,
     CatalogProductListItemResponse,
+    CategoryDetailResponse,
+    CategoryParentResponse,
+    CategoryTreeNodeResponse,
+    CategoryTreeResponse,
     FacetValueResponse,
     PaginatedCatalogProductsResponse,
     ProductCardResponse,
@@ -28,6 +36,144 @@ class CatalogService:
     def __init__(self, session: AsyncSession):
         self.repo = CatalogRepository(session)
         self.session = session
+
+
+    async def get_categories_flat(self) -> list[CatalogCategoryResponse]:
+        categories = await self._get_category_map()
+        roots, children = self._index_categories(categories)
+        result: list[CatalogCategoryResponse] = []
+
+        def walk(category: dict[str, Any], names_path: list[str]) -> None:
+            category_path = [*names_path, category["name"]]
+            result.append(
+                CatalogCategoryResponse(
+                    id=category["id"],
+                    name=category["name"],
+                    parent_id=category.get("parent_id"),
+                    level=len(category_path) - 1,
+                    path=category_path,
+                )
+            )
+            for child in children.get(category["id"], []):
+                walk(child, category_path)
+
+        for root in roots:
+            walk(root, [])
+        return result
+
+    async def get_categories_tree(self) -> list[CategoryTreeNodeResponse]:
+        categories = await self._get_category_map()
+        return self._build_category_tree(categories)
+
+    async def get_categories_tree_response(self) -> CategoryTreeResponse:
+        return CategoryTreeResponse(items=await self.get_categories_tree())
+
+    async def get_category_detail(
+        self,
+        category_id: UUID,
+        include_product_count: bool = False,
+    ) -> CategoryDetailResponse:
+        categories = await self._get_category_map()
+        category = categories.get(category_id)
+        if category is None:
+            raise NotFoundException("Category not found")
+
+        parent = None
+        parent_id = category.get("parent_id")
+        if parent_id is not None:
+            parent_category = categories.get(parent_id)
+            if parent_category is None:
+                self._raise_orphan_node()
+            parent = CategoryParentResponse(
+                id=parent_category["id"],
+                name=parent_category["name"],
+                slug=parent_category.get("slug"),
+            )
+
+        return CategoryDetailResponse(
+            id=category["id"],
+            name=category["name"],
+            slug=category.get("slug"),
+            description=category.get("description"),
+            parent=parent,
+            product_count=self._category_product_count(category) if include_product_count else None,
+            seo=category.get("seo"),
+            meta_tags=category.get("meta_tags") or {},
+            image_url=category.get("image_url"),
+            is_active=bool(category.get("is_active", True)),
+            created_at=self._dt_to_str(category.get("created_at")),
+            updated_at=self._dt_to_str(category.get("updated_at")),
+        )
+
+    async def get_breadcrumbs(
+        self,
+        category_id: UUID | None,
+        product_id: UUID | None,
+    ) -> BreadcrumbsResponse:
+        if category_id is not None and product_id is not None:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "ambiguous_param",
+                    "message": "only one of category_id or product_id must be provided",
+                },
+            )
+        if category_id is None and product_id is None:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "missing_param",
+                    "message": "category_id or product_id must be provided",
+                },
+            )
+
+        resolved_via = "category_id"
+        resolved_product_id = None
+        resolved_category_id = category_id
+        if product_id is not None:
+            product = await self._get_visible_product_payload(product_id)
+            raw_category_id = self._product_category_id(product)
+            if raw_category_id is None:
+                self._raise_orphan_node()
+            try:
+                resolved_category_id = UUID(str(raw_category_id))
+            except ValueError:
+                self._raise_orphan_node()
+            resolved_product_id = product_id
+            resolved_via = "product_id"
+
+        assert resolved_category_id is not None
+        categories = await self._get_category_map()
+        if resolved_category_id not in categories:
+            if category_id is not None:
+                raise NotFoundException("Category not found")
+            self._raise_orphan_node()
+
+        path = self._category_path(categories, resolved_category_id)
+        slugs: list[str] = []
+        items: list[BreadcrumbItemResponse] = []
+        for index, category in enumerate(path):
+            slug = category.get("slug") or self._slug_from_name(category["name"])
+            slugs.append(slug)
+            items.append(
+                BreadcrumbItemResponse(
+                    id=category["id"],
+                    slug=category.get("slug"),
+                    name=category["name"],
+                    url=f"/catalog/{'/'.join(slugs)}",
+                    level=index,
+                    is_current=index == len(path) - 1,
+                )
+            )
+
+        return BreadcrumbsResponse(
+            data=items,
+            meta=BreadcrumbsMetaResponse(
+                resolved_via=resolved_via,
+                category_id=resolved_category_id,
+                product_id=resolved_product_id,
+            ),
+        )
 
     async def get_products(
         self,
@@ -108,6 +254,154 @@ class CatalogService:
             skus=skus,
         )
 
+
+    async def _get_category_map(self) -> dict[UUID, dict[str, Any]]:
+        payload = await self._get_b2b_json(
+            B2B_CATEGORIES_PATH,
+            [],
+            not_found_message="Category not found",
+        )
+        categories = self._normalize_categories_payload(payload)
+        self._validate_category_hierarchy(categories)
+        return {category["id"]: category for category in categories}
+
+    def _build_category_tree(
+        self,
+        categories: dict[UUID, dict[str, Any]],
+    ) -> list[CategoryTreeNodeResponse]:
+        roots, children = self._index_categories(categories)
+
+        def build_node(category: dict[str, Any], names_path: list[str]) -> CategoryTreeNodeResponse:
+            category_path = [*names_path, category["name"]]
+            return CategoryTreeNodeResponse(
+                id=category["id"],
+                name=category["name"],
+                parent_id=category.get("parent_id"),
+                level=len(category_path) - 1,
+                path=category_path,
+                children=[build_node(child, category_path) for child in children.get(category["id"], [])],
+            )
+
+        return [build_node(root, []) for root in roots]
+
+    def _index_categories(
+        self,
+        categories: dict[UUID, dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], dict[UUID, list[dict[str, Any]]]]:
+        roots: list[dict[str, Any]] = []
+        children: dict[UUID, list[dict[str, Any]]] = {}
+        for category in categories.values():
+            parent_id = category.get("parent_id")
+            if parent_id is None:
+                roots.append(category)
+            else:
+                children.setdefault(parent_id, []).append(category)
+        return roots, children
+
+    def _normalize_categories_payload(self, payload: dict[str, Any] | list[Any]) -> list[dict[str, Any]]:
+        if isinstance(payload, list):
+            raw_items = payload
+        elif isinstance(payload, dict):
+            raw_items = payload.get("items") or payload.get("categories") or payload.get("data") or []
+        else:
+            raw_items = []
+
+        categories: list[dict[str, Any]] = []
+        for raw in raw_items:
+            if not isinstance(raw, dict):
+                continue
+            category_id = self._to_uuid(raw.get("id"))
+            if category_id is None:
+                continue
+            parent_id = self._to_uuid(raw.get("parent_id")) if raw.get("parent_id") else None
+            categories.append(
+                {
+                    **raw,
+                    "id": category_id,
+                    "name": raw.get("name") or raw.get("title") or "",
+                    "slug": raw.get("slug"),
+                    "parent_id": parent_id,
+                }
+            )
+        return categories
+
+    def _validate_category_hierarchy(self, categories: list[dict[str, Any]]) -> None:
+        ids = {category["id"] for category in categories}
+        for category in categories:
+            parent_id = category.get("parent_id")
+            if parent_id is not None and parent_id not in ids:
+                self._raise_orphan_node()
+
+        category_map = {category["id"]: category for category in categories}
+        for category in categories:
+            seen: set[UUID] = set()
+            current = category
+            while current.get("parent_id") is not None:
+                parent_id = current["parent_id"]
+                if parent_id in seen:
+                    self._raise_orphan_node()
+                seen.add(parent_id)
+                parent = category_map.get(parent_id)
+                if parent is None:
+                    self._raise_orphan_node()
+                current = parent
+
+    def _category_path(
+        self,
+        categories: dict[UUID, dict[str, Any]],
+        category_id: UUID,
+    ) -> list[dict[str, Any]]:
+        category = categories.get(category_id)
+        if category is None:
+            raise NotFoundException("Category not found")
+
+        result = [category]
+        seen = {category_id}
+        current = category
+        while current.get("parent_id") is not None:
+            parent_id = current["parent_id"]
+            if parent_id in seen:
+                self._raise_orphan_node()
+            parent = categories.get(parent_id)
+            if parent is None:
+                self._raise_orphan_node()
+            result.append(parent)
+            seen.add(parent_id)
+            current = parent
+        result.reverse()
+        return result
+
+    @staticmethod
+    def _category_product_count(category: dict[str, Any]) -> int | None:
+        for field in ("product_count", "products_count", "total_products"):
+            if category.get(field) is not None:
+                return CatalogService._to_int(category.get(field))
+        return None
+
+    @staticmethod
+    def _raise_orphan_node() -> None:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "orphan_node", "message": "category hierarchy is broken"},
+        )
+
+    @staticmethod
+    def _dt_to_str(value: Any) -> str | None:
+        if value is None:
+            return None
+        return value.isoformat() if hasattr(value, "isoformat") else str(value)
+
+    @staticmethod
+    def _slug_from_name(value: str) -> str:
+        return value.strip().lower().replace(" ", "-") or "category"
+
+    @staticmethod
+    def _to_uuid(value: Any) -> UUID | None:
+        try:
+            return UUID(str(value)) if value else None
+        except (TypeError, ValueError):
+            return None
+
     async def _get_b2b_json(
         self,
         path: str,
@@ -170,12 +464,12 @@ class CatalogService:
         return product
 
     def _build_catalog_query(
-        self,
-        query_params: QueryParams,
-        limit: int,
-        offset: int,
-        q: str | None,
-        sort: str,
+            self,
+            query_params: QueryParams,
+            limit: int,
+            offset: int,
+            q: str | None,
+            sort: str,
     ) -> list[tuple[str, str]]:
         query: list[tuple[str, str]] = [
             ("limit", str(limit)),
@@ -183,7 +477,7 @@ class CatalogService:
             ("sort", sort),
         ]
         if q:
-            query.append(("q", q))
+            query.append(("search", q))  # B2B ждёт search, не q
 
         category_id = self._extract_category_id(query_params)
         if category_id:
