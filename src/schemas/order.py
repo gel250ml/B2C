@@ -7,6 +7,30 @@ from src.models.order import OrderStatus
 from src.models.payment_method import PaymentMethodType
 
 
+
+
+class CheckoutItemRequest(BaseModel):
+    sku_id: UUID
+    quantity: int
+    unit_price: int | None = None
+
+
+class CreateOrderRequest(BaseModel):
+    address_id: UUID | None = None
+    payment_method_id: UUID | None = None
+    comment: str | None = None
+    items_snapshot: list[CheckoutItemRequest] | None = None
+
+    idempotency_key: UUID | None = None
+    items: list[CheckoutItemRequest] | None = None
+    delivery_address: str | None = None
+
+    def checkout_items(self) -> list[CheckoutItemRequest]:
+        if self.items_snapshot is not None:
+            return self.items_snapshot
+        return self.items or []
+
+
 class CancelOrderRequest(BaseModel):
     reason: str | None = None
 
