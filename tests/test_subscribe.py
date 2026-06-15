@@ -29,9 +29,15 @@ async def test_subscribe_returns_204_on_success(
             },
         )
 
-    assert response.status_code == status.HTTP_204_NO_CONTENT
-    assert response.text == ""
+    assert response.status_code == status.HTTP_201_CREATED
 
+    data = response.json()
+
+    assert data["product_id"] == str(product_id)
+    assert set(data["notify_on"]) == {
+        "BACK_IN_STOCK",
+        "PRICE_DROP",
+    }
 
 @pytest.mark.asyncio
 async def test_duplicate_subscription_returns_409(
@@ -53,7 +59,7 @@ async def test_duplicate_subscription_returns_409(
             headers={"Authorization": f"Bearer {token}"},
             json=payload,
         )
-        assert first_response.status_code == status.HTTP_204_NO_CONTENT
+        assert first_response.status_code == status.HTTP_201_CREATED
 
         second_response = await async_client.post(
             f"/api/v1/favorites/{product_id}/subscribe",

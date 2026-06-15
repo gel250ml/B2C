@@ -30,18 +30,34 @@ async def get_favorites(
 
 @router.post(
     "/{product_id}/subscribe",
-    status_code=status.HTTP_204_NO_CONTENT,
+    status_code=status.HTTP_201_CREATED,
 )
 async def subscribe_to_product(
     product_id: UUID,
     payload: ProductSubscriptionCreateRequest,
     buyer_id: UUID = Depends(get_current_buyer_id),
     db: AsyncSession = Depends(get_db),
-) -> Response:
+):
     service = ProductSubscriptionService(db)
-    await service.subscribe(buyer_id, product_id, payload.events)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    subscription = await service.subscribe(
+        buyer_id,
+        product_id,
+        payload.events,
+    )
+
+    notify_on = []
+
+    if subscription.back_in_stock:
+        notify_on.append("BACK_IN_STOCK")
+
+    if subscription.price_drop:
+        notify_on.append("PRICE_DROP")
+
+    return {
+        "product_id": str(product_id),
+        "notify_on": notify_on,
+    }
 
 @router.delete(
     "/{product_id}/subscribe",
