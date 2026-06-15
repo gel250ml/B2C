@@ -17,6 +17,7 @@ from src.schemas.catalog import (
     CatalogCategoryResponse,
     CatalogFacetsResponse,
     CatalogProductListItemResponse,
+    CatalogProductCardResponse,
     CategoryDetailResponse,
     CategoryParentResponse,
     CategoryTreeNodeResponse,
@@ -212,7 +213,7 @@ class CatalogService:
         self,
         product_id: UUID,
         limit: int,
-    ) -> list[CatalogProductListItemResponse]:
+    ) -> list[CatalogProductCardResponse]:
         product = await self.get_visible_product_payload(product_id)
         category_id = self._product_category_id(product)
         if category_id is None:
@@ -227,7 +228,12 @@ class CatalogService:
             ],
             not_found_message="Product not found",
         )
-        items = self._build_products_response(payload, limit=limit, offset=0).items
+        raw_items = payload if isinstance(payload, list) else payload.get("items", []) if isinstance(payload, dict) else []
+        items = [
+            self.build_catalog_product_card(item)
+            for item in raw_items
+            if isinstance(item, dict)
+        ]
         return self._exclude_current_product(items, product_id, limit)
 
     async def get_product_card(self, product_id: UUID) -> ProductCardResponse:
@@ -564,6 +570,15 @@ class CatalogService:
             is_in_cart=bool(product.get("is_in_cart", False)),
         )
 
+    def build_catalog_product_card(self, product: dict[str, Any]) -> CatalogProductCardResponse:
+        return CatalogProductCardResponse(
+            id=product["id"],
+            name=product.get("name") or product.get("title") or "",
+            min_price=self._catalog_product_price(product),
+            has_stock=self._catalog_product_in_stock(product),
+            images=self._catalog_product_images(product),
+        )
+
     def _build_facets_response(
         self,
         payload: dict[str, Any] | list[Any],
@@ -749,11 +764,11 @@ class CatalogService:
 
     @staticmethod
     def _exclude_current_product(
-        items: list[CatalogProductListItemResponse],
+        items: list[CatalogProductCardResponse],
         product_id: UUID,
         limit: int,
-    ) -> list[CatalogProductListItemResponse]:
-        result: list[CatalogProductListItemResponse] = []
+    ) -> list[CatalogProductCardResponse]:
+        result: list[CatalogProductCardResponse] = []
         seen_ids: set[UUID] = set()
         for item in items:
             if item.id == product_id or item.id in seen_ids:
@@ -798,6 +813,34 @@ class CatalogService:
             return {"code": "NOT_FOUND", "message": not_found_message}
 
         return {"code": "UPSTREAM_ERROR", "message": "B2B returned an error"}
+
+    @staticmethod
+    def _catalog_product_images(product: dict[str, Any]) -> list[dict[str, Any]]:
+        raw_images = product.get("images") or []
+        if isinstance(raw_images, list) and raw_images:
+            result = []
+            for index, raw_image in enumerate(raw_images):
+                image_url = CatalogService._image_url(raw_image)
+                if image_url:
+                    result.append(
+                        {
+                            "url": image_url,
+                            "alt": raw_image.get("alt") if isinstance(raw_image, dict) else None,
+                            "ordering": raw_image.get("ordering", index) if isinstance(raw_image, dict) else index,
+                            "is_main": bool(raw_image.get("is_main", index == 0)) if isinstance(raw_image, dict) else index == 0,
+                        }
+                    )
+            if result:
+                return result
+
+        image_url = (
+            CatalogService._image_url(product.get("image"))
+            or CatalogService._image_url(product.get("cover_image"))
+            or CatalogService._main_product_image(product)
+        )
+        if not image_url:
+            return []
+        return [{"url": image_url, "ordering": 0, "is_main": True}]
 
     @staticmethod
     def _catalog_product_price(product: dict[str, Any]) -> int:
