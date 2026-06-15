@@ -73,6 +73,42 @@ class B2BCatalogClient:
     async def get_sku(self, sku_id: UUID) -> B2BSkuData | None:
         return (await self.get_skus([sku_id])).get(sku_id)
 
+    async def get_products_by_ids(self, product_ids: list[UUID]) -> list[dict[str, Any]]:
+        """Load public products by ids from B2B batch endpoint.
+
+        B2C keeps only product UUIDs for home collections; fresh product data
+        is always fetched from B2B through the public service-to-service API.
+        """
+        product_ids = list(dict.fromkeys(product_ids))
+        if not product_ids:
+            return []
+
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=5.0) as client:
+            try:
+                response = await client.post(
+                    B2B_PUBLIC_PRODUCTS_BATCH_PATH,
+                    json={"product_ids": [str(item) for item in product_ids]},
+                    headers=self.headers,
+                )
+            except httpx.HTTPError as exc:
+                raise HTTPException(
+                    status_code=503,
+                    detail={"code": "SERVICE_UNAVAILABLE", "message": "B2B service unavailable"},
+                ) from exc
+
+        if response.status_code >= 500:
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "SERVICE_UNAVAILABLE", "message": "B2B service unavailable"},
+            )
+        if response.status_code >= 400:
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "SERVICE_UNAVAILABLE", "message": "B2B service unavailable"},
+            )
+
+        return self._extract_products(response.json())
+
     def _build_sku_map(self, payload: Any) -> dict[UUID, B2BSkuData]:
         products = self._extract_products(payload)
         result: dict[UUID, B2BSkuData] = {}
