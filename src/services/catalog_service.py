@@ -464,7 +464,7 @@ class CatalogService:
             )
 
         product = response.json()
-        if product.get("status") != "MODERATED" or product.get("deleted") is True:
+        if self.is_hidden_product(product):
             raise NotFoundException("Product not found")
 
         return product
@@ -778,6 +778,15 @@ class CatalogService:
             if len(result) >= limit:
                 break
         return result
+
+    @staticmethod
+    def is_hidden_product(product: dict[str, Any]) -> bool:
+        return (
+            not product
+            or product.get("status") != "MODERATED"
+            or bool(product.get("deleted", product.get("is_deleted", False)))
+            or bool(product.get("blocked", product.get("is_blocked", False)))
+        )
 
     @staticmethod
     def _validate_sort(sort: str) -> None:

@@ -4,6 +4,7 @@ from .banner import Banner, BannerEvent
 from .buyer import Buyer
 from .cart import Cart
 from .cart_item import CartItem
+from .collection import Collection, CollectionProduct
 from .favorite import Favorite
 from .idempotency_key import IdempotencyKey
 from .notification import Notification
@@ -22,6 +23,8 @@ __all__ = [
     "Buyer",
     "Cart",
     "CartItem",
+    "Collection",
+    "CollectionProduct",
     "Favorite",
     "IdempotencyKey",
     "Notification",
