@@ -13,6 +13,7 @@ from src.routes.cart_router import router as cart_router
 from src.routes.catalog_router import router as catalog_router
 from src.routes.category_navigation_router import router as category_navigation_router
 from src.routes.favorite_router import router as favorite_router
+from src.routes.home_router import router as home_router
 from src.routes.notification_router import router as notification_router
 from src.routes.order_router import router as order_router
 from src.routes.payment_method_router import router as payment_method_router
@@ -48,6 +49,10 @@ tags_metadata = [
     {
         "name": "Cart",
         "description": "Корзина (гость + авторизованный)",
+    },
+    {
+        "name": "Home",
+        "description": "Главная страница: баннеры и CTR-события",
     },
     {
         "name": "Favorites",
@@ -112,6 +117,7 @@ app.include_router(payment_method_router, prefix="/api/v1")
 app.include_router(catalog_router, prefix="/api/v1")
 app.include_router(category_navigation_router, prefix="/api/v1")
 app.include_router(cart_router, prefix="/api/v1")
+app.include_router(home_router, prefix="/api/v1")
 app.include_router(favorite_router, prefix="/api/v1")
 app.include_router(order_router, prefix="/api/v1")
 app.include_router(notification_router, prefix="/api/v1")

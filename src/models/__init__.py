@@ -1,5 +1,6 @@
 from .address import Address
 from .b2b_event import B2BEvent
+from .banner import Banner, BannerEvent
 from .buyer import Buyer
 from .cart import Cart
 from .cart_item import CartItem
@@ -16,6 +17,8 @@ from .refresh_token import RefreshToken
 __all__ = [
     "Address",
     "B2BEvent",
+    "Banner",
+    "BannerEvent",
     "Buyer",
     "Cart",
     "CartItem",
