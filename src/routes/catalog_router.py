@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.dependencies import get_db
 from src.schemas.catalog import (
     CatalogFacetsResponse,
-    CatalogProductListItemResponse,
+    CatalogProductCardResponse,
     CategoryTreeNodeResponse,
     PaginatedCatalogProductsResponse,
     ProductCardResponse,
@@ -60,17 +60,17 @@ async def get_catalog_products(
     request: Request,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    q: str | None = Query(None),
+    search: str | None = Query(None),
     sort: str = Query(DEFAULT_CATALOG_SORT),
     db: AsyncSession = Depends(get_db),
 ) -> PaginatedCatalogProductsResponse:
-    if q is not None:
-        if len(q) < 3:
+    if search is not None:
+        if len(search) < 3:
             raise HTTPException(
                 status_code=400,
                 detail={"code": "INVALID_REQUEST", "message": "Search query must be at least 3 characters"},
             )
-        if len(q) > 255:
+        if len(search) > 255:
             raise HTTPException(
                 status_code=400,
                 detail={"code": "INVALID_REQUEST", "message": "Search query must be at most 255 characters"},
@@ -80,7 +80,7 @@ async def get_catalog_products(
         query_params=request.query_params,
         limit=limit,
         offset=offset,
-        q=q,
+        q=search,
         sort=sort,
     )
 
@@ -116,13 +116,13 @@ async def get_catalog_facets(
 
 @router.get(
     "/products/{product_id}/similar",
-    response_model=list[CatalogProductListItemResponse],
+    response_model=list[CatalogProductCardResponse],
 )
 async def get_similar_products(
     product_id: UUID,
     limit: int = Query(10, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
-) -> list[CatalogProductListItemResponse]:
+) -> list[CatalogProductCardResponse]:
     service = CatalogService(db)
     return await service.get_similar_products(product_id, limit=limit)
 

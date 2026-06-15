@@ -150,6 +150,16 @@ class CatalogProductListItemResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class CatalogProductCardResponse(BaseModel):
+    id: UUID
+    name: str
+    min_price: int
+    has_stock: bool
+    images: list[CatalogImageResponse] = []
+
+    model_config = ConfigDict(extra="ignore")
+
+
 class PaginatedCatalogProductsResponse(BaseModel):
     items: list[CatalogProductListItemResponse]
     total_count: int
