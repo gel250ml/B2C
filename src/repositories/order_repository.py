@@ -26,6 +26,20 @@ class OrderRepository:
         return result.scalar_one_or_none()
 
 
+    async def get_by_id_for_status_update(self, order_id: UUID) -> Order | None:
+        result = await self.session.execute(
+            select(Order)
+            .where(Order.id == order_id)
+            .options(
+                selectinload(Order.items),
+                selectinload(Order.status_history),
+                selectinload(Order.address),
+                selectinload(Order.payment_method),
+            )
+        )
+        return result.scalar_one_or_none()
+
+
     async def get_by_idempotency_key(self, idempotency_key: UUID) -> Order | None:
         result = await self.session.execute(
             select(Order)
@@ -62,6 +76,20 @@ class OrderRepository:
         result = await self.session.execute(
             select(Order)
             .where(Order.status == OrderStatus.CANCEL_PENDING)
+            .options(
+                selectinload(Order.items),
+                selectinload(Order.status_history),
+                selectinload(Order.address),
+                selectinload(Order.payment_method),
+            )
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def get_delivered_orders(self, limit: int = 100) -> list[Order]:
+        result = await self.session.execute(
+            select(Order)
+            .where(Order.status == OrderStatus.DELIVERED)
             .options(
                 selectinload(Order.items),
                 selectinload(Order.status_history),

@@ -32,7 +32,7 @@ class B2BInventoryClient:
         try:
             async with httpx.AsyncClient(base_url=self.base_url, timeout=5.0) as client:
                 response = await client.post(
-                    "/api/v1/reserve",
+                    "/api/v1/inventory/reserve",
                     json=payload,
                     headers=self.headers,
                 )
@@ -70,6 +70,46 @@ class B2BInventoryClient:
             raise B2BUnavailableError("B2B inventory service unavailable")
 
         response.raise_for_status()
+
+    async def fulfill(self, order_id: UUID, items: list[dict[str, str | int]]) -> None:
+        payload = {
+            "order_id": str(order_id),
+            "items": items,
+        }
+
+        try:
+            async with httpx.AsyncClient(base_url=self.base_url, timeout=5.0) as client:
+                response = await client.post(
+                    "/api/v1/inventory/fulfill",
+                    json=payload,
+                    headers=self.headers,
+                )
+                if response.status_code in {404, 405}:
+                    response = await client.post(
+                        "/api/v1/fulfill",
+                        json=payload,
+                        headers=self.headers,
+                    )
+        except (httpx.TimeoutException, httpx.HTTPError) as exc:
+            raise B2BUnavailableError("B2B inventory service unavailable") from exc
+
+        if response.status_code >= 500:
+            raise B2BUnavailableError("B2B inventory service unavailable")
+
+        response.raise_for_status()
+
+        try:
+            data = response.json() if response.content else {}
+        except ValueError:
+            data = {}
+
+        if isinstance(data, dict):
+            status_value = data.get("status")
+            if data.get("fulfilled") is False or data.get("ok") is False:
+                raise B2BUnavailableError("B2B fulfill was not completed")
+            if status_value is not None and status_value != "FULFILLED":
+                raise B2BUnavailableError("B2B fulfill was not completed")
+
 
     @staticmethod
     def _failed_items(response: httpx.Response) -> list[dict]:
