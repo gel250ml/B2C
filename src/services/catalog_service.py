@@ -219,7 +219,7 @@ class CatalogService:
             return []
 
         payload = await self._get_b2b_json(
-            f"/api/v1/products/{product_id}/similar",
+            f"{B2B_PUBLIC_PRODUCTS_PATH}/{product_id}/similar",
             [
                 ("category", str(category_id)),
                 ("limit", str(limit)),
@@ -249,7 +249,7 @@ class CatalogService:
             reviews_count=product.get("reviews_count", 0) or 0,
             images=product.get("images", []),
             seller=product.get("seller"),
-            description=product.get("description"),
+            description=product.get("description") or "",
             attributes=product.get("attributes") or self._characteristics_to_attributes(product.get("characteristics", [])),
             skus=skus,
         )
@@ -435,7 +435,7 @@ class CatalogService:
     async def get_visible_product_payload(self, product_id: UUID) -> dict[str, Any]:
         try:
             async with httpx.AsyncClient(base_url=B2B_URL, timeout=5.0, follow_redirects=True) as client:
-                response = await client.get(f"/api/v1/products/{product_id}", headers=self._headers())
+                response = await client.get(f"{B2B_PUBLIC_PRODUCTS_PATH}/{product_id}", headers=self._headers())
         except httpx.HTTPError as exc:
             raise HTTPException(
                 status_code=502,

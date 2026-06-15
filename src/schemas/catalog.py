@@ -132,7 +132,7 @@ class ProductCardResponse(BaseModel):
     reviews_count: int = 0
     images: list[CatalogImageResponse] = []
     seller: CatalogSellerResponse | None = None
-    description: str | None = None
+    description: str = ""
     attributes: dict[str, Any] = {}
     skus: list[ProductSkuResponse] = []
 

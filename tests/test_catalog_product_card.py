@@ -163,7 +163,7 @@ async def test_product_card_returns_full_data_with_skus(async_client):
     assert data["skus"][1]["old_price"] == 12999000
     assert data["skus"][0]["available_quantity"] == 10
     assert data["skus"][0]["attributes"]["Цвет"] == "Чёрный"
-    assert MockB2BClient.requested_url == f"/api/v1/products/{product_id}"
+    assert MockB2BClient.requested_url == f"/api/v1/public/products/{product_id}"
 
 
 @pytest.mark.asyncio
