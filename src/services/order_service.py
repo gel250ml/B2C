@@ -1,5 +1,4 @@
 import hashlib
-import inspect
 import json
 import logging
 from datetime import UTC, datetime, timedelta
@@ -33,7 +32,12 @@ logger = logging.getLogger(__name__)
 
 
 class OrderService:
-    ALLOWED_CANCEL_STATUSES = {OrderStatus.CREATED, OrderStatus.PAID}
+    ALLOWED_CANCEL_STATUSES = {
+        OrderStatus.CREATED,
+        OrderStatus.PAID,
+        OrderStatus.ASSEMBLING,
+        OrderStatus.DELIVERING,
+    }
     CHECKOUT_IDEMPOTENCY_SCOPE = "orders.checkout"
     IDEMPOTENCY_TTL = timedelta(hours=1)
 
@@ -66,15 +70,15 @@ class OrderService:
             if failed_items:
                 raise self._reserve_failed_exception(failed_items)
 
-            order_id = uuid4()
-            await self._reserve_inventory(
-                order_id=order_id,
+            await self.b2b_inventory_client.reserve(
                 idempotency_key=idempotency_key,
-                items=items,
+                items=[
+                    {"sku_id": str(item.sku_id), "quantity": item.quantity}
+                    for item in items
+                ],
             )
 
             order = self._build_order(
-                order_id=order_id,
                 buyer_id=buyer_id,
                 idempotency_key=idempotency_key,
                 payload=payload,
@@ -370,30 +374,8 @@ class OrderService:
             "reason": reason,
         }
 
-    async def _reserve_inventory(
-        self,
-        order_id: UUID,
-        idempotency_key: UUID,
-        items,
-    ) -> None:
-        reserve_items = [
-            {"sku_id": str(item.sku_id), "quantity": item.quantity}
-            for item in items
-        ]
-        reserve_method = self.b2b_inventory_client.reserve
-        reserve_kwargs = {"idempotency_key": idempotency_key, "items": reserve_items}
-
-        # Backward compatible with existing tests/mocks that still expose the old
-        # reserve(idempotency_key, items) signature, while production client sends
-        # order_id required by B2B ReserveRequest.
-        if "order_id" in inspect.signature(reserve_method).parameters:
-            reserve_kwargs["order_id"] = order_id
-
-        await reserve_method(**reserve_kwargs)
-
     def _build_order(
         self,
-        order_id: UUID,
         buyer_id: UUID,
         idempotency_key: UUID,
         payload: CreateOrderRequest,
@@ -403,6 +385,7 @@ class OrderService:
         payment_method: PaymentMethod,
     ) -> Order:
         now = self._now()
+        order_id = uuid4()
         subtotal = sum(sku_map[item.sku_id].unit_price * item.quantity for item in items)
         order = Order(
             id=order_id,
