@@ -30,6 +30,7 @@ from src.schemas.catalog import (
 
 ALLOWED_CATALOG_SORTS = ("price_asc", "price_desc", "popularity", "new")
 DEFAULT_CATALOG_SORT = "popularity"
+B2B_PUBLIC_PRODUCTS_PATH = "/api/v1/public/products"
 
 
 class CatalogService:
@@ -191,7 +192,7 @@ class CatalogService:
             q=q,
             sort=sort,
         )
-        payload = await self._get_b2b_json("/api/v1/products", upstream_query)
+        payload = await self._get_b2b_json(B2B_PUBLIC_PRODUCTS_PATH, upstream_query)
         return self._build_products_response(payload, limit=limit, offset=offset)
 
     async def get_facets(
@@ -201,12 +202,11 @@ class CatalogService:
     ) -> CatalogFacetsResponse:
         if sort is not None:
             self._validate_sort(sort)
-        upstream_query = self._build_facets_query(query_params)
-        payload = await self._get_b2b_json("/api/v1/catalog/facets", upstream_query)
-        category_id = payload.get("category_id") if isinstance(payload, dict) else None
-        if category_id is None:
-            category_id = self._extract_category_id(query_params)
-        return self._build_facets_response(payload, category_id=category_id)
+
+        upstream_query = self._build_facets_source_query(query_params)
+        payload = await self._get_b2b_json(B2B_PUBLIC_PRODUCTS_PATH, upstream_query)
+        category_id = self._extract_category_id(query_params)
+        return self._build_local_facets_response(payload, query_params, category_id=category_id)
 
     async def get_similar_products(
         self,
@@ -410,7 +410,7 @@ class CatalogService:
     ) -> dict[str, Any] | list[Any]:
         url = self._build_url(path, query)
         try:
-            async with httpx.AsyncClient(base_url=B2B_URL, timeout=5.0) as client:
+            async with httpx.AsyncClient(base_url=B2B_URL, timeout=5.0, follow_redirects=True) as client:
                 response = await client.get(url, headers=self._headers())
         except httpx.HTTPError as exc:
             raise HTTPException(
@@ -434,7 +434,7 @@ class CatalogService:
 
     async def get_visible_product_payload(self, product_id: UUID) -> dict[str, Any]:
         try:
-            async with httpx.AsyncClient(base_url=B2B_URL, timeout=5.0) as client:
+            async with httpx.AsyncClient(base_url=B2B_URL, timeout=5.0, follow_redirects=True) as client:
                 response = await client.get(f"/api/v1/products/{product_id}", headers=self._headers())
         except httpx.HTTPError as exc:
             raise HTTPException(
@@ -479,18 +479,20 @@ class CatalogService:
         if q:
             query.append(("search", q))  # B2B ждёт search, не q
 
-        category_id = self._extract_category_id(query_params)
-        if category_id:
-            query.append(("category_id", category_id))
-
-        for name, value in self._extract_filters(query_params):
-            if name == "category_id":
-                continue
-            query.append((f"filters[{name}]", value))
-
+        query.extend(self._build_public_product_filter_query(query_params))
         return query
 
-    def _build_facets_query(self, query_params: QueryParams) -> list[tuple[str, str]]:
+    def _build_facets_source_query(self, query_params: QueryParams) -> list[tuple[str, str]]:
+        query: list[tuple[str, str]] = [("limit", "100"), ("offset", "0")]
+
+        search = query_params.get("search") or query_params.get("q")
+        if search:
+            query.append(("search", search))
+
+        query.extend(self._build_public_product_filter_query(query_params))
+        return query
+
+    def _build_public_product_filter_query(self, query_params: QueryParams) -> list[tuple[str, str]]:
         query: list[tuple[str, str]] = []
         category_id = self._extract_category_id(query_params)
         if category_id:
@@ -498,6 +500,12 @@ class CatalogService:
 
         for name, value in self._extract_filters(query_params):
             if name == "category_id":
+                continue
+            if name == "price_min":
+                query.append(("min_price", value))
+                continue
+            if name == "price_max":
+                query.append(("max_price", value))
                 continue
             query.append((f"filters[{name}]", value))
 
@@ -550,7 +558,7 @@ class CatalogService:
         return CatalogProductListItemResponse(
             id=product["id"],
             title=product.get("title") or product.get("name") or "",
-            image=self._image_url(product.get("image")) or self._main_product_image(product),
+            image=self._image_url(product.get("image")) or self._image_url(product.get("cover_image")) or self._main_product_image(product),
             price=self._catalog_product_price(product),
             in_stock=self._catalog_product_in_stock(product),
             is_in_cart=bool(product.get("is_in_cart", False)),
@@ -593,6 +601,123 @@ class CatalogService:
             )
 
         return CatalogFacetsResponse(category_id=category_id, facets=facets)
+
+    def _build_local_facets_response(
+        self,
+        payload: dict[str, Any] | list[Any],
+        query_params: QueryParams,
+        category_id: str | None,
+    ) -> CatalogFacetsResponse:
+        if isinstance(payload, dict) and ("facets" in payload):
+            return self._build_facets_response(payload, category_id=category_id)
+
+        raw_items = payload if isinstance(payload, list) else payload.get("items", []) if isinstance(payload, dict) else []
+        selected_filters = [
+            (name, value)
+            for name, value in self._extract_filters(query_params)
+            if name not in {"category_id", "price_min", "price_max"}
+        ]
+
+        counters: dict[str, dict[str, int]] = {}
+        for product in raw_items:
+            if not isinstance(product, dict):
+                continue
+            if not self._product_matches_selected_filters(product, selected_filters):
+                continue
+            for name, values in self._extract_facet_values_from_product(product).items():
+                bucket = counters.setdefault(name, {})
+                for value in values:
+                    bucket[value] = bucket.get(value, 0) + 1
+
+        facets = [
+            {
+                "name": name,
+                "values": [
+                    FacetValueResponse(value=value, count=count)
+                    for value, count in sorted(values.items(), key=lambda item: item[0])
+                ],
+            }
+            for name, values in sorted(counters.items(), key=lambda item: item[0])
+        ]
+        return CatalogFacetsResponse(category_id=category_id, facets=facets)
+
+    def _product_matches_selected_filters(
+        self,
+        product: dict[str, Any],
+        selected_filters: list[tuple[str, str]],
+    ) -> bool:
+        values_by_name = self._extract_facet_values_from_product(product)
+        normalized_values = {
+            self._normalize_facet_name(name): {str(value).lower() for value in values}
+            for name, values in values_by_name.items()
+        }
+
+        for filter_name, expected_value in selected_filters:
+            values = normalized_values.get(self._normalize_facet_name(filter_name), set())
+            if str(expected_value).lower() not in values:
+                return False
+        return True
+
+    def _extract_facet_values_from_product(self, product: dict[str, Any]) -> dict[str, set[str]]:
+        facets: dict[str, set[str]] = {}
+
+        def add(name: Any, value: Any) -> None:
+            if name is None or value is None:
+                return
+            label = str(name).strip()
+            if not label:
+                return
+            values = value if isinstance(value, list) else [value]
+            for raw_value in values:
+                if raw_value is None:
+                    continue
+                text = str(raw_value).strip()
+                if text:
+                    facets.setdefault(label, set()).add(text)
+
+        attributes = product.get("attributes")
+        if isinstance(attributes, dict):
+            for name, value in attributes.items():
+                add(name, value)
+
+        for characteristic in product.get("characteristics", []) or []:
+            if isinstance(characteristic, dict):
+                add(characteristic.get("name") or characteristic.get("slug"), characteristic.get("value"))
+
+        for field in ("brand", "color", "memory", "seller_id"):
+            if product.get(field) is not None:
+                add(field, product.get(field))
+
+        seller = product.get("seller")
+        if isinstance(seller, dict):
+            add("seller_id", seller.get("id"))
+            add("seller", seller.get("display_name"))
+
+        for sku in product.get("skus", []) or []:
+            if not isinstance(sku, dict):
+                continue
+            sku_attributes = sku.get("attributes")
+            if isinstance(sku_attributes, dict):
+                for name, value in sku_attributes.items():
+                    add(name, value)
+            for characteristic in sku.get("characteristics", []) or []:
+                if isinstance(characteristic, dict):
+                    add(characteristic.get("name") or characteristic.get("slug"), characteristic.get("value"))
+
+        return facets
+
+    @staticmethod
+    def _normalize_facet_name(name: str) -> str:
+        normalized = str(name).strip().lower().replace(" ", "_").replace("-", "_")
+        aliases = {
+            "бренд": "brand",
+            "цвет": "color",
+            "объём_памяти": "memory",
+            "объем_памяти": "memory",
+            "память": "memory",
+            "продавец": "seller",
+        }
+        return aliases.get(normalized, normalized)
 
     def _build_public_sku(self, sku: dict[str, Any]) -> ProductSkuResponse:
         base_price = sku.get("price", 0) or 0
