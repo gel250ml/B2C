@@ -25,7 +25,7 @@ class CartImageResponse(BaseModel):
 
 class CartItemResponse(BaseModel):
     sku_id: UUID
-    product_id: UUID | None = None
+    product_id: UUID | None
     name: str
     sku_code: str | None = None
     quantity: int
