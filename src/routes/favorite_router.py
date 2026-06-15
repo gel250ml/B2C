@@ -59,7 +59,7 @@ async def unsubscribe_from_product(
 
 @router.put(
     "/{product_id}",
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_204_NO_CONTENT,
 )
 async def add_to_favorites(
     product_id: UUID,
@@ -68,7 +68,7 @@ async def add_to_favorites(
 ):
     service = FavoriteService(db)
     await service.add_favorite(buyer_id, product_id)
-    return Response(status_code=status.HTTP_200_OK)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.delete(

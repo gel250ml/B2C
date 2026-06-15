@@ -20,7 +20,7 @@ async def test_add_to_favorites_returns_200(
         headers={"Authorization": f"Bearer {token}"},
     )
 
-    assert response.status_code == status.HTTP_200_OK
+    assert response.status_code == status.HTTP_204_NO_CONTENT
 
 
 @pytest.mark.asyncio
@@ -35,13 +35,13 @@ async def test_repeat_add_returns_200_not_duplicate(
         f"/api/v1/favorites/{product_id}",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert first_response.status_code == status.HTTP_200_OK
+    assert first_response.status_code == status.HTTP_204_NO_CONTENT
 
     second_response = await async_client.put(
         f"/api/v1/favorites/{product_id}",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert second_response.status_code == status.HTTP_200_OK
+    assert second_response.status_code == status.HTTP_204_NO_CONTENT
 
 
 @pytest.mark.asyncio
