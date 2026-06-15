@@ -72,11 +72,11 @@ def make_product(product_id: str | None = None) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_search_returns_results(async_client):
+async def test_search_returns_matching_products(async_client):
     product = make_product()
     MockB2BClient.response_payload = {"items": [product], "total_count": 1, "limit": 20, "offset": 0}
 
-    resp = await async_client.get("/api/v1/catalog/products?search=наушники")
+    resp = await async_client.get("/api/v1/catalog/products?q=наушники")
 
     assert resp.status_code == 200
     data = resp.json()
@@ -86,7 +86,7 @@ async def test_search_returns_results(async_client):
 
 @pytest.mark.asyncio
 async def test_search_too_short_returns_400(async_client):
-    resp = await async_client.get("/api/v1/catalog/products?search=аб")
+    resp = await async_client.get("/api/v1/catalog/products?q=аб")
 
     assert resp.status_code == 400
     body = resp.json()
@@ -96,7 +96,7 @@ async def test_search_too_short_returns_400(async_client):
 @pytest.mark.asyncio
 async def test_search_too_long_returns_400(async_client):
     long_query = "а" * 256
-    resp = await async_client.get(f"/api/v1/catalog/products?search={long_query}")
+    resp = await async_client.get(f"/api/v1/catalog/products?q={long_query}")
 
     assert resp.status_code == 400
     body = resp.json()
@@ -108,7 +108,7 @@ async def test_search_too_long_returns_400(async_client):
 async def test_search_empty_result_returns_200(async_client):
     MockB2BClient.response_payload = {"items": [], "total_count": 0, "limit": 20, "offset": 0}
 
-    resp = await async_client.get("/api/v1/catalog/products?search=несуществующий")
+    resp = await async_client.get("/api/v1/catalog/products?q=несуществующий")
 
     assert resp.status_code == 200
     data = resp.json()
@@ -118,7 +118,7 @@ async def test_search_empty_result_returns_200(async_client):
 
 @pytest.mark.asyncio
 async def test_search_proxied_to_b2b_as_search_param(async_client):
-    resp = await async_client.get("/api/v1/catalog/products?search=наушники")
+    resp = await async_client.get("/api/v1/catalog/products?q=наушники")
 
     assert resp.status_code == 200
     assert "search=" in MockB2BClient.requested_url
@@ -131,7 +131,7 @@ async def test_search_with_category_filter(async_client):
     MockB2BClient.response_payload = {"items": [product], "total_count": 1, "limit": 20, "offset": 0}
 
     resp = await async_client.get(
-        f"/api/v1/catalog/products?search=наушники&filter[category_id]={category_id}"
+        f"/api/v1/catalog/products?q=наушники&filter[category_id]={category_id}"
     )
 
     assert resp.status_code == 200
