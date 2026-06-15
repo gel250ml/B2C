@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -33,6 +34,10 @@ class CreateOrderRequest(BaseModel):
 
 class CancelOrderRequest(BaseModel):
     reason: str | None = None
+
+
+class OrderStatusUpdateRequest(BaseModel):
+    status: Literal["ASSEMBLING", "DELIVERING", "DELIVERED"]
 
 
 class OrderStatusHistoryResponse(BaseModel):

@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import Header, HTTPException
 
-from src.core.config import B2B_TO_MOD_KEY, MOD_TO_B2B_KEY
+from src.core.config import B2B_TO_B2C_KEY, B2B_TO_MOD_KEY, MOD_TO_B2B_KEY
 from src.database.session import async_session_maker
 
 
@@ -120,3 +120,14 @@ async def verify_moderation_service_key(
             status_code=401,
             detail={"code": "UNAUTHORIZED", "message": "Invalid service key"},
         )
+
+async def verify_b2b_service_key(
+    x_service_key: str | None = Header(None, alias="X-Service-Key"),
+) -> None:
+    expected_key = B2B_TO_B2C_KEY or "dev-b2b-to-b2c-key"
+    if x_service_key != expected_key:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "UNAUTHORIZED", "message": "Missing or invalid service key"},
+        )
+

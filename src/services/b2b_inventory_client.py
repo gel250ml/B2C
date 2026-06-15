@@ -15,10 +15,6 @@ class ReserveFailedError(Exception):
         super().__init__("Reserve failed")
 
 
-B2B_INVENTORY_RESERVE_PATH = "/api/v1/inventory/reserve"
-B2B_INVENTORY_UNRESERVE_PATH = "/api/v1/inventory/unreserve"
-
-
 class B2BInventoryClient:
     def __init__(self) -> None:
         self.base_url = B2B_URL
@@ -26,23 +22,17 @@ class B2BInventoryClient:
         if B2C_TO_B2B_KEY:
             self.headers["X-Service-Key"] = B2C_TO_B2B_KEY
 
-    async def reserve(
-        self,
-        idempotency_key: UUID,
-        items: list[dict[str, str | int]],
-        order_id: UUID | None = None,
-    ) -> None:
+
+    async def reserve(self, idempotency_key: UUID, items: list[dict[str, str | int]]) -> None:
         payload = {
             "idempotency_key": str(idempotency_key),
             "items": items,
         }
-        if order_id is not None:
-            payload["order_id"] = str(order_id)
 
         try:
             async with httpx.AsyncClient(base_url=self.base_url, timeout=5.0) as client:
                 response = await client.post(
-                    B2B_INVENTORY_RESERVE_PATH,
+                    "/api/v1/inventory/reserve",
                     json=payload,
                     headers=self.headers,
                 )
@@ -69,7 +59,7 @@ class B2BInventoryClient:
         try:
             async with httpx.AsyncClient(base_url=self.base_url, timeout=5.0) as client:
                 response = await client.post(
-                    B2B_INVENTORY_UNRESERVE_PATH,
+                    "/api/v1/inventory/unreserve",
                     json=payload,
                     headers=self.headers,
                 )
@@ -80,6 +70,46 @@ class B2BInventoryClient:
             raise B2BUnavailableError("B2B inventory service unavailable")
 
         response.raise_for_status()
+
+    async def fulfill(self, order_id: UUID, items: list[dict[str, str | int]]) -> None:
+        payload = {
+            "order_id": str(order_id),
+            "items": items,
+        }
+
+        try:
+            async with httpx.AsyncClient(base_url=self.base_url, timeout=5.0) as client:
+                response = await client.post(
+                    "/api/v1/inventory/fulfill",
+                    json=payload,
+                    headers=self.headers,
+                )
+                if response.status_code in {404, 405}:
+                    response = await client.post(
+                        "/api/v1/fulfill",
+                        json=payload,
+                        headers=self.headers,
+                    )
+        except (httpx.TimeoutException, httpx.HTTPError) as exc:
+            raise B2BUnavailableError("B2B inventory service unavailable") from exc
+
+        if response.status_code >= 500:
+            raise B2BUnavailableError("B2B inventory service unavailable")
+
+        response.raise_for_status()
+
+        try:
+            data = response.json() if response.content else {}
+        except ValueError:
+            data = {}
+
+        if isinstance(data, dict):
+            status_value = data.get("status")
+            if data.get("fulfilled") is False or data.get("ok") is False:
+                raise B2BUnavailableError("B2B fulfill was not completed")
+            if status_value is not None and status_value != "FULFILLED":
+                raise B2BUnavailableError("B2B fulfill was not completed")
+
 
     @staticmethod
     def _failed_items(response: httpx.Response) -> list[dict]:
