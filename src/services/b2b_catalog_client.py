@@ -62,7 +62,11 @@ class B2BCatalogClient:
                 status_code=503,
                 detail={"code": "SERVICE_UNAVAILABLE", "message": "B2B service unavailable"},
             )
-        response.raise_for_status()
+        if response.status_code >= 400:
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "SERVICE_UNAVAILABLE", "message": "B2B service unavailable"},
+            )
 
         return self._build_sku_map(response.json())
 
@@ -78,7 +82,7 @@ class B2BCatalogClient:
             product_id = self._to_uuid(product.get("id"))
             product_name = product.get("name") or product.get("title") or ""
             product_images = product.get("images") or []
-            main_product_image = self._main_image(product_images)
+            main_product_image = self._main_image(product_images) or self._main_image(product.get("cover_image"))
             for sku in product.get("skus", []) or []:
                 sku_id = self._to_uuid(sku.get("id"))
                 if not sku_id:
@@ -87,11 +91,11 @@ class B2BCatalogClient:
                     sku_id=sku_id,
                     product_id=product_id,
                     name=sku.get("name") or sku.get("sku_name") or product_name,
-                    sku_code=sku.get("sku_code"),
+                    sku_code=sku.get("sku_code") or sku.get("article"),
                     unit_price=self._price(sku),
                     available_quantity=sku.get("available_quantity", sku.get("active_quantity", 0)) or 0,
                     product_status=product.get("status"),
-                    product_deleted=bool(product.get("deleted", False)),
+                    product_deleted=bool(product.get("deleted", product.get("is_deleted", False))),
                     product_blocked=bool(product.get("blocked", False)) or product.get("status") in {"BLOCKED", "HARD_BLOCKED"},
                     image=self._main_image(sku.get("images") or []) or sku.get("image") or main_product_image,
                     product_title=product_name,
