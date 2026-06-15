@@ -60,17 +60,17 @@ async def get_catalog_products(
     request: Request,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    search: str | None = Query(None),
+    q: str | None = Query(None),
     sort: str = Query(DEFAULT_CATALOG_SORT),
     db: AsyncSession = Depends(get_db),
 ) -> PaginatedCatalogProductsResponse:
-    if search is not None:
-        if len(search) < 3:
+    if q is not None:
+        if len(q) < 3:
             raise HTTPException(
                 status_code=400,
                 detail={"code": "INVALID_REQUEST", "message": "Search query must be at least 3 characters"},
             )
-        if len(search) > 255:
+        if len(q) > 255:
             raise HTTPException(
                 status_code=400,
                 detail={"code": "INVALID_REQUEST", "message": "Search query must be at most 255 characters"},
@@ -80,7 +80,7 @@ async def get_catalog_products(
         query_params=request.query_params,
         limit=limit,
         offset=offset,
-        q=search,
+        q=q,
         sort=sort,
     )
 
