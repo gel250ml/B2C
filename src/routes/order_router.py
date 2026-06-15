@@ -3,8 +3,8 @@ from uuid import UUID
 from fastapi import APIRouter, Body, Depends, Header, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.database.dependencies import get_current_buyer_id, get_db
-from src.schemas.order import CancelOrderRequest, CreateOrderRequest, OrderResponse
+from src.database.dependencies import get_current_buyer_id, get_db, verify_b2b_service_key
+from src.schemas.order import CancelOrderRequest, CreateOrderRequest, OrderResponse, OrderStatusUpdateRequest
 from src.services.order_service import OrderService
 
 router = APIRouter(
@@ -49,3 +49,21 @@ async def cancel_order(
         buyer_id=buyer_id,
         reason=payload.reason if payload else None,
     )
+
+@router.post(
+    "/{order_id}/status",
+    response_model=OrderResponse,
+    include_in_schema=False,
+)
+async def update_order_status(
+    order_id: UUID,
+    payload: OrderStatusUpdateRequest,
+    _: None = Depends(verify_b2b_service_key),
+    db: AsyncSession = Depends(get_db),
+):
+    service = OrderService(db)
+    return await service.transition_order_status(
+        order_id=order_id,
+        new_status=payload.status,
+    )
+

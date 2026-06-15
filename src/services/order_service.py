@@ -38,6 +38,11 @@ class OrderService:
         OrderStatus.ASSEMBLING,
         OrderStatus.DELIVERING,
     }
+    ORDER_STATUS_TRANSITIONS = {
+        OrderStatus.PAID: {OrderStatus.ASSEMBLING},
+        OrderStatus.ASSEMBLING: {OrderStatus.DELIVERING},
+        OrderStatus.DELIVERING: {OrderStatus.DELIVERED},
+    }
     CHECKOUT_IDEMPOTENCY_SCOPE = "orders.checkout"
     IDEMPOTENCY_TTL = timedelta(hours=1)
 
@@ -145,6 +150,47 @@ class OrderService:
         await self._set_status(order, OrderStatus.CANCELLED, reason)
         return self._to_response(order)
 
+    async def transition_order_status(
+        self,
+        order_id: UUID,
+        new_status: str,
+    ) -> OrderResponse:
+        order = await self.repo.get_by_id_for_status_update(order_id)
+        if order is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "ORDER_NOT_FOUND", "message": "Order not found"},
+            )
+
+        requested_status = OrderStatus(new_status)
+        current_status = self._normalize_status(order.status)
+
+        if current_status == requested_status:
+            if requested_status == OrderStatus.DELIVERED:
+                await self._fulfill_delivered_order(order)
+            return self._to_response(order)
+
+        if requested_status not in self.ORDER_STATUS_TRANSITIONS.get(current_status, set()):
+            current_status_value = self._status_value(current_status)
+            requested_status_value = self._status_value(requested_status)
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "ORDER_STATUS_TRANSITION_NOT_ALLOWED",
+                    "message": f"Cannot transition order from {current_status_value} to {requested_status_value}",
+                    "current_status": current_status_value,
+                    "requested_status": requested_status_value,
+                },
+            )
+
+        await self._set_status(order, requested_status)
+
+        if requested_status == OrderStatus.DELIVERED:
+            await self._fulfill_delivered_order(order)
+
+        return self._to_response(order)
+
+
     async def retry_pending_cancellations(self, limit: int = 100) -> int:
         orders = await self.repo.get_cancel_pending_orders(limit)
         cancelled_count = 0
@@ -160,6 +206,20 @@ class OrderService:
             cancelled_count += 1
 
         return cancelled_count
+
+    async def retry_delivered_fulfillments(self, limit: int = 100) -> int:
+        orders = await self.repo.get_delivered_orders(limit)
+        fulfilled_count = 0
+
+        for order in orders:
+            try:
+                await self._fulfill_order(order)
+            except Exception:
+                logger.exception("B2B fulfill retry failed for order %s", order.id)
+                continue
+            fulfilled_count += 1
+
+        return fulfilled_count
 
     def _resolve_idempotency_key(
         self,
@@ -442,6 +502,24 @@ class OrderService:
             await self.session.delete(record)
             await self.session.commit()
 
+    async def _fulfill_delivered_order(self, order: Order) -> None:
+        try:
+            await self._fulfill_order(order)
+        except Exception:
+            logger.exception("B2B fulfill failed for delivered order %s; retry required", order.id)
+
+    async def _fulfill_order(self, order: Order) -> None:
+        await self.b2b_inventory_client.fulfill(
+            order_id=order.id,
+            items=[
+                {
+                    "sku_id": str(item.sku_id),
+                    "quantity": item.quantity,
+                }
+                for item in order.items
+            ],
+        )
+
     async def _unreserve_order(self, order: Order) -> None:
         await self.b2b_inventory_client.unreserve(
             order_id=order.id,
@@ -514,6 +592,10 @@ class OrderService:
     @staticmethod
     def _now() -> datetime:
         return datetime.now(UTC).replace(tzinfo=None)
+
+    @staticmethod
+    def _normalize_status(status: OrderStatus | str) -> OrderStatus:
+        return status if isinstance(status, OrderStatus) else OrderStatus(str(status))
 
     @staticmethod
     def _status_value(status: OrderStatus | str) -> str:
