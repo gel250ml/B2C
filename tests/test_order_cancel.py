@@ -130,8 +130,57 @@ async def test_unreserve_failure_transitions_to_cancel_pending(async_client, tes
 
 
 @pytest.mark.asyncio
-async def test_cancel_assembling_order_returns_409(async_client, test_db, monkeypatch):
-    order_id, buyer_id, _ = await create_order(test_db, status=OrderStatus.ASSEMBLING)
+async def test_cancel_assembling_order_transitions_to_cancelled(async_client, test_db, monkeypatch):
+    order_id, buyer_id, sku_id = await create_order(test_db, status=OrderStatus.ASSEMBLING)
+    calls = []
+
+    async def fake_unreserve(self, order_id, items):
+        calls.append({"order_id": order_id, "items": items})
+
+    monkeypatch.setattr(B2BInventoryClient, "unreserve", fake_unreserve)
+
+    response = await async_client.post(
+        f"/api/v1/orders/{order_id}/cancel",
+        headers={"Authorization": f"Bearer {create_jwt_token(buyer_id)}"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "CANCELLED"
+    assert body["items"][0]["sku_id"] == str(sku_id)
+    assert [item["status"] for item in body["status_history"]] == ["CANCEL_PENDING", "CANCELLED"]
+    assert calls == [
+        {
+            "order_id": order_id,
+            "items": [{"sku_id": str(sku_id), "quantity": 2}],
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_cancel_delivering_order_transitions_to_cancelled(async_client, test_db, monkeypatch):
+    order_id, buyer_id, _ = await create_order(test_db, status=OrderStatus.DELIVERING)
+    called = False
+
+    async def fake_unreserve(self, order_id, items):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(B2BInventoryClient, "unreserve", fake_unreserve)
+
+    response = await async_client.post(
+        f"/api/v1/orders/{order_id}/cancel",
+        headers={"Authorization": f"Bearer {create_jwt_token(buyer_id)}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "CANCELLED"
+    assert called is True
+
+
+@pytest.mark.asyncio
+async def test_cancel_delivered_order_returns_409(async_client, test_db, monkeypatch):
+    order_id, buyer_id, _ = await create_order(test_db, status=OrderStatus.DELIVERED)
     called = False
 
     async def fake_unreserve(self, order_id, items):
@@ -148,8 +197,8 @@ async def test_cancel_assembling_order_returns_409(async_client, test_db, monkey
     assert response.status_code == 409
     assert response.json() == {
         "code": "CANCEL_NOT_ALLOWED",
-        "message": "Отмена невозможна: заказ в статусе ASSEMBLING",
-        "current_status": "ASSEMBLING",
+        "message": "Отмена невозможна: заказ в статусе DELIVERED",
+        "current_status": "DELIVERED",
     }
     assert called is False
 
