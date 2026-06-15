@@ -5,8 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.dependencies import get_db
 from src.schemas.catalog import (
+    CatalogCategoryResponse,
     CatalogFacetsResponse,
     CatalogProductCardResponse,
+    CategoryDetailResponse,
     CategoryTreeNodeResponse,
     PaginatedCatalogProductsResponse,
     ProductCardResponse,
@@ -19,11 +21,12 @@ router = APIRouter(
 )
 
 
-@router.get("/categories")
+@router.get("/categories", response_model=list[CatalogCategoryResponse])
 async def get_categories(
     db: AsyncSession = Depends(get_db),
-) -> None:
-    return None
+) -> list[CatalogCategoryResponse]:
+    service = CatalogService(db)
+    return await service.get_categories_flat()
 
 
 @router.get("/categories/tree", response_model=list[CategoryTreeNodeResponse])
@@ -34,6 +37,19 @@ async def get_categories_tree(
     service = CatalogService(db)
     response.headers["Cache-Control"] = "max-age=3600"
     return await service.get_categories_tree()
+
+
+@router.get("/categories/{category_id}", response_model=CategoryDetailResponse)
+async def get_category_detail(
+    category_id: UUID,
+    include_product_count: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+) -> CategoryDetailResponse:
+    service = CatalogService(db)
+    return await service.get_category_detail(
+        category_id=category_id,
+        include_product_count=include_product_count,
+    )
 
 
 @router.get(
@@ -60,27 +76,22 @@ async def get_catalog_products(
     request: Request,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    search: str | None = Query(None),
+    q: str | None = Query(None, max_length=200),
     sort: str = Query(DEFAULT_CATALOG_SORT),
     db: AsyncSession = Depends(get_db),
 ) -> PaginatedCatalogProductsResponse:
-    if search is not None:
-        if len(search) < 3:
+    if q is not None:
+        if len(q) < 3:
             raise HTTPException(
                 status_code=400,
                 detail={"code": "INVALID_REQUEST", "message": "Search query must be at least 3 characters"},
-            )
-        if len(search) > 255:
-            raise HTTPException(
-                status_code=400,
-                detail={"code": "INVALID_REQUEST", "message": "Search query must be at most 255 characters"},
             )
     service = CatalogService(db)
     return await service.get_products(
         query_params=request.query_params,
         limit=limit,
         offset=offset,
-        q=search,
+        q=q,
         sort=sort,
     )
 

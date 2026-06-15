@@ -95,13 +95,13 @@ async def test_search_too_short_returns_400(async_client):
 
 @pytest.mark.asyncio
 async def test_search_too_long_returns_400(async_client):
-    long_query = "а" * 256
+    long_query = "а" * 201
     resp = await async_client.get(f"/api/v1/catalog/products?q={long_query}")
 
     assert resp.status_code == 400
     body = resp.json()
     assert body["code"] == "INVALID_REQUEST"
-    assert "255 characters" in body["message"]
+    assert "200" in body["message"]
 
 
 @pytest.mark.asyncio

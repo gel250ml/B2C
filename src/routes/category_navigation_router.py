@@ -4,26 +4,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.dependencies import get_db
-from src.schemas.catalog import (
-    BreadcrumbsResponse,
-    CategoryDetailResponse,
-)
+from src.schemas.catalog import BreadcrumbsResponse
 from src.services.catalog_service import CatalogService
 
 router = APIRouter(tags=["Catalog"])
-
-
-@router.get("/categories/{category_id}", response_model=CategoryDetailResponse)
-async def get_category_detail(
-    category_id: UUID,
-    include_product_count: bool = Query(False),
-    db: AsyncSession = Depends(get_db),
-) -> CategoryDetailResponse:
-    service = CatalogService(db)
-    return await service.get_category_detail(
-        category_id=category_id,
-        include_product_count=include_product_count,
-    )
 
 
 @router.get("/breadcrumbs", response_model=BreadcrumbsResponse)
