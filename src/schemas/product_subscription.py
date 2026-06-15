@@ -1,5 +1,5 @@
 from enum import Enum
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 
 
 class SubscriptionEvent(str, Enum):
@@ -8,10 +8,12 @@ class SubscriptionEvent(str, Enum):
 
 
 class ProductSubscriptionCreateRequest(BaseModel):
-    events: list[SubscriptionEvent] = [
-        SubscriptionEvent.BACK_IN_STOCK,
-        SubscriptionEvent.PRICE_DROP,
-    ]
+    events: list[SubscriptionEvent] = Field(
+        default_factory=lambda: [
+            SubscriptionEvent.BACK_IN_STOCK,
+            SubscriptionEvent.PRICE_DROP,
+        ]
+    )
 
     @field_validator('events')
     @classmethod

@@ -25,15 +25,13 @@ class ProductSubscriptionService:
             return True
         except NotFoundException:
             return False
-        except Exception:
-            return False
 
     async def subscribe(
-        self,
-        buyer_id: UUID,
-        product_id: UUID,
-        events: list[SubscriptionEvent],
-    ):
+            self,
+            buyer_id: UUID,
+            product_id: UUID,
+            events: list[SubscriptionEvent],
+    ) -> ProductSubscription:
         product_exists = await self.check_product_exists(product_id)
         if not product_exists:
             raise NotFoundException("Product not found")
@@ -59,10 +57,10 @@ class ProductSubscriptionService:
         return subscription
 
     async def unsubscribe(
-        self,
-        buyer_id: UUID,
-        product_id: UUID,
-    ):
+            self,
+            buyer_id: UUID,
+            product_id: UUID,
+    ) -> None:
         deleted = await self.repo.delete(
             buyer_id,
             product_id,
