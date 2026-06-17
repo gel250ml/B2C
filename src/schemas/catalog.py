@@ -141,11 +141,16 @@ class ProductCardResponse(BaseModel):
 
 class CatalogProductListItemResponse(BaseModel):
     id: UUID
-    title: str
-    image: str | None = None
-    price: int
-    in_stock: bool
-    is_in_cart: bool = False
+    name: str
+    slug: str | None = None
+    category: CatalogCategoryResponse | None = None
+    min_price: int
+    old_price: int | None = None
+    has_stock: bool
+    rating: float | int | None = None
+    reviews_count: int = 0
+    images: list[CatalogImageResponse] = []
+    seller: CatalogSellerResponse | None = None
 
     model_config = ConfigDict(extra="ignore")
 
