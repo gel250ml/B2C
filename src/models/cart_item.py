@@ -5,6 +5,7 @@ from sqlalchemy import (
     ForeignKey,
     Uuid,
     DateTime,
+    String
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -25,3 +26,8 @@ class CartItem(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), )
 
     cart = relationship("Cart", back_populates="items", )
+
+    unavailable_reason = Column(
+        String(64),
+        nullable=True,
+    )

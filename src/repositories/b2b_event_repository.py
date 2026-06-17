@@ -19,10 +19,17 @@ class B2bEventRepository:
 
     async def create(self, payload: B2BEventCreateRequest) -> B2BEvent:
         event = B2BEvent(
-            event_type=payload.event_type,
+            event_type=payload.event,
             idempotency_key=payload.idempotency_key,
-            payload=payload.payload,
-            occurred_at=payload.occurred_at,
+            payload={
+                "product_id": str(payload.product_id),
+                "sku_ids": [
+                    str(x)
+                    for x in payload.sku_ids
+                ],
+                "reason": payload.reason,
+            },
+            occurred_at=payload.date,
             processed=False,
         )
         self.session.add(event)

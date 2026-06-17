@@ -6,8 +6,8 @@ from src.schemas.b2b_event import B2BEventCreateRequest, B2BEventCreateResponse
 from src.services.b2b_event_service import B2bEventService
 
 router = APIRouter(
-    prefix="/b2b/events",
-    tags=["B2B Events"],
+    prefix="/events/product",
+    tags=["Events Product"],
 )
 
 

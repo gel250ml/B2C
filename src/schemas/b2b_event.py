@@ -1,19 +1,22 @@
 from datetime import datetime
-from typing import Any
 from uuid import UUID
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 
 class B2BEventCreateRequest(BaseModel):
-    event_type: str
     idempotency_key: UUID
-    payload: dict[str, Any]
-    occurred_at: datetime
-
-    model_config = ConfigDict(extra="ignore")
+    event: Literal[
+        "PRODUCT_BLOCKED",
+        "PRODUCT_DELETED",
+        "SKU_OUT_OF_STOCK",
+    ]
+    product_id: UUID
+    sku_ids: list[UUID]
+    reason: str | None = None
+    date: datetime
 
 
 class B2BEventCreateResponse(BaseModel):
-    ok: bool = True
-    processed: bool = False
+    accepted: bool = True
