@@ -53,6 +53,51 @@ class OrderService:
         self.b2b_catalog_client = B2BCatalogClient()
         self.b2b_inventory_client = B2BInventoryClient()
 
+    async def get_order(
+            self,
+            order_id: UUID,
+            buyer_id: UUID,
+    ):
+        order = await self.repo.get_by_id_and_buyer(
+            order_id,
+            buyer_id,
+        )
+
+        if order is None:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "code": "ORDER_NOT_FOUND",
+                    "message": "Заказ не найден",
+                },
+            )
+
+        return OrderResponse.model_validate(order)
+
+    async def get_orders(
+            self,
+            buyer_id: UUID,
+            limit: int,
+            offset: int,
+            status: OrderStatus | None,
+    ):
+        items, total = await self.repo.get_orders_by_buyer(
+            buyer_id,
+            limit,
+            offset,
+            status,
+        )
+
+        return {
+            "items": [
+                OrderResponse.model_validate(x)
+                for x in items
+            ],
+            "total_count": total,
+            "limit": limit,
+            "offset": offset,
+        }
+
     async def create_order(
         self,
         buyer_id: UUID,
