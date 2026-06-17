@@ -563,11 +563,16 @@ class CatalogService:
     def build_catalog_product_item(self, product: dict[str, Any]) -> CatalogProductListItemResponse:
         return CatalogProductListItemResponse(
             id=product["id"],
-            title=product.get("title") or product.get("name") or "",
-            image=self._image_url(product.get("image")) or self._image_url(product.get("cover_image")) or self._main_product_image(product),
-            price=self._catalog_product_price(product),
-            in_stock=self._catalog_product_in_stock(product),
-            is_in_cart=bool(product.get("is_in_cart", False)),
+            name=product.get("name") or product.get("title") or "",
+            slug=product.get("slug"),
+            category=product.get("category"),
+            min_price=self._catalog_product_price(product),
+            old_price=self._catalog_product_old_price(product),
+            has_stock=self._catalog_product_in_stock(product),
+            rating=product.get("rating"),
+            reviews_count=self._to_int(product.get("reviews_count", 0)),
+            images=self._catalog_product_images(product),
+            seller=self._safe_seller(product.get("seller")),
         )
 
     def build_catalog_product_card(self, product: dict[str, Any]) -> CatalogProductCardResponse:
@@ -850,6 +855,34 @@ class CatalogService:
         if not image_url:
             return []
         return [{"url": image_url, "ordering": 0, "is_main": True}]
+
+    @staticmethod
+    def _catalog_product_old_price(product: dict[str, Any]) -> int | None:
+        if product.get("old_price") is not None:
+            return CatalogService._to_int(product.get("old_price"))
+
+        old_prices: list[int] = []
+        for sku in product.get("skus", []) or []:
+            if not isinstance(sku, dict):
+                continue
+            if sku.get("old_price") is not None:
+                old_prices.append(CatalogService._to_int(sku.get("old_price")))
+                continue
+            discount = CatalogService._to_int(sku.get("discount", 0))
+            if discount > 0 and sku.get("price") is not None:
+                old_prices.append(CatalogService._to_int(sku.get("price")))
+
+        return min(old_prices) if old_prices else None
+
+    @staticmethod
+    def _safe_seller(raw_seller: Any) -> dict[str, Any] | None:
+        if not isinstance(raw_seller, dict):
+            return None
+        seller_id = raw_seller.get("id")
+        display_name = raw_seller.get("display_name") or raw_seller.get("name")
+        if not seller_id or not display_name:
+            return None
+        return {"id": seller_id, "display_name": display_name}
 
     @staticmethod
     def _catalog_product_price(product: dict[str, Any]) -> int:
