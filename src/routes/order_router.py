@@ -1,10 +1,12 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Header, Response
+from fastapi import APIRouter, Body, Depends, Header, Response, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.dependencies import get_current_buyer_id, get_db, verify_b2b_service_key
-from src.schemas.order import CancelOrderRequest, CreateOrderRequest, OrderResponse, OrderStatusUpdateRequest
+from src.models import OrderStatus
+from src.schemas.order import CancelOrderRequest, CreateOrderRequest, OrderResponse, OrderStatusUpdateRequest, \
+    PaginatedOrdersResponse
 from src.services.order_service import OrderService
 
 router = APIRouter(
@@ -13,10 +15,38 @@ router = APIRouter(
 )
 
 
-@router.get("/")
-async def get_all_orders(db: AsyncSession = Depends(get_db)):
-    return None
+@router.get("", response_model=PaginatedOrdersResponse)
+async def get_orders(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    status: OrderStatus | None = Query(None),
+    buyer_id: UUID = Depends(get_current_buyer_id),
+    db: AsyncSession = Depends(get_db),
+):
+    service = OrderService(db)
 
+    return await service.get_orders(
+        buyer_id=buyer_id,
+        limit=limit,
+        offset=offset,
+        status=status,
+    )
+
+@router.get(
+    "/{order_id}",
+    response_model=OrderResponse,
+)
+async def get_order(
+    order_id: UUID,
+    buyer_id: UUID = Depends(get_current_buyer_id),
+    db: AsyncSession = Depends(get_db),
+):
+    service = OrderService(db)
+
+    return await service.get_order(
+        order_id=order_id,
+        buyer_id=buyer_id,
+    )
 
 @router.post("", response_model=OrderResponse, status_code=201)
 async def create_order(

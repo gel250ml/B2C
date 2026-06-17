@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -115,3 +115,43 @@ class OrderRepository:
         self.session.add(history_item)
         order.status_history.append(history_item)
         return history_item
+
+    async def get_orders_by_buyer(
+            self,
+            buyer_id: UUID,
+            limit: int,
+            offset: int,
+            status: OrderStatus | None = None,
+    ):
+        stmt = (
+            select(Order)
+            .where(Order.buyer_id == buyer_id)
+            .order_by(Order.created_at.desc())
+        )
+
+        if status:
+            stmt = stmt.where(Order.status == status)
+
+        total_stmt = (
+            select(func.count())
+            .select_from(Order)
+            .where(Order.buyer_id == buyer_id)
+        )
+
+        if status:
+            total_stmt = total_stmt.where(Order.status == status)
+
+        total = await self.session.scalar(total_stmt)
+
+        result = await self.session.execute(
+            stmt.options(
+                selectinload(Order.items),
+                selectinload(Order.status_history),
+                selectinload(Order.address),
+                selectinload(Order.payment_method),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+
+        return list(result.scalars().all()), total
