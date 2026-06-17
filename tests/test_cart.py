@@ -28,8 +28,8 @@ def sku_data(sku_id: UUID = SKU_ID, quantity: int = 10, status: str = "MODERATED
 
 @pytest.mark.asyncio
 async def test_add_sku_increments_quantity_if_already_in_cart(async_client, monkeypatch):
-    async def fake_get_skus(self, sku_ids):
-        return {sku_id: sku_data(sku_id) for sku_id in sku_ids}
+    async def fake_get_skus(self, product_ids):
+        return {SKU_ID: sku_data(SKU_ID)}
 
     monkeypatch.setattr(B2BCatalogClient, "get_skus", fake_get_skus)
     session_id = str(uuid4())
@@ -54,8 +54,11 @@ async def test_add_sku_increments_quantity_if_already_in_cart(async_client, monk
 
 @pytest.mark.asyncio
 async def test_get_cart_enriched_with_b2b_data(async_client, monkeypatch):
-    async def fake_get_skus(self, sku_ids):
-        return {sku_id: sku_data(sku_id) for sku_id in sku_ids}
+    requested_batches = []
+
+    async def fake_get_skus(self, product_ids):
+        requested_batches.append(list(product_ids))
+        return {SKU_ID: sku_data(SKU_ID)}
 
     monkeypatch.setattr(B2BCatalogClient, "get_skus", fake_get_skus)
     session_id = str(uuid4())
@@ -73,14 +76,15 @@ async def test_get_cart_enriched_with_b2b_data(async_client, monkeypatch):
     assert body["items"][0]["unit_price"] == 100
     assert body["items"][0]["line_total"] == 200
     assert body["subtotal"] == 200
+    assert requested_batches[-1] == [PRODUCT_ID]
 
 
 @pytest.mark.asyncio
 async def test_unavailable_sku_shown_with_reason(async_client, monkeypatch):
     current_quantity = 10
 
-    async def fake_get_skus(self, sku_ids):
-        return {sku_id: sku_data(sku_id, quantity=current_quantity) for sku_id in sku_ids}
+    async def fake_get_skus(self, product_ids):
+        return {SKU_ID: sku_data(SKU_ID, quantity=current_quantity)}
 
     monkeypatch.setattr(B2BCatalogClient, "get_skus", fake_get_skus)
     session_id = str(uuid4())
@@ -105,8 +109,8 @@ async def test_unavailable_sku_shown_with_reason(async_client, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_guest_cart_merged_on_login(async_client, monkeypatch):
-    async def fake_get_skus(self, sku_ids):
-        return {sku_id: sku_data(sku_id) for sku_id in sku_ids}
+    async def fake_get_skus(self, product_ids):
+        return {SKU_ID: sku_data(SKU_ID)}
 
     monkeypatch.setattr(B2BCatalogClient, "get_skus", fake_get_skus)
     session_id = str(uuid4())

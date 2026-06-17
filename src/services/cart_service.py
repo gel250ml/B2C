@@ -86,7 +86,7 @@ class CartService:
 
     async def _build_response(self, cart) -> CartResponse:
         items = list(cart.items or [])
-        sku_data = await self.b2b_client.get_skus([item.sku_id for item in items])
+        sku_data = await self.b2b_client.get_skus([item.product_id for item in items if item.product_id])
 
         response_items: list[CartItemResponse] = []
         subtotal = 0
