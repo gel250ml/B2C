@@ -120,14 +120,6 @@ class OrderService:
             if failed_items:
                 raise self._reserve_failed_exception(failed_items)
 
-            await self.b2b_inventory_client.reserve(
-                idempotency_key=idempotency_key,
-                items=[
-                    {"sku_id": str(item.sku_id), "quantity": item.quantity}
-                    for item in items
-                ],
-            )
-
             order = self._build_order(
                 buyer_id=buyer_id,
                 idempotency_key=idempotency_key,
@@ -139,6 +131,15 @@ class OrderService:
             )
             self.session.add(order)
             await self.session.flush()
+
+            await self.b2b_inventory_client.reserve(
+                idempotency_key=idempotency_key,
+                items=[
+                    {"sku_id": str(item.sku_id), "quantity": item.quantity}
+                    for item in items
+                ],
+                order_id=order.id,
+            )
 
             response_payload = OrderResponse.model_validate(order).model_dump(mode="json")
             idempotency_record.response = response_payload

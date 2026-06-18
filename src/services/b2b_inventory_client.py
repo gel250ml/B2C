@@ -22,12 +22,15 @@ class B2BInventoryClient:
         if B2C_TO_B2B_KEY:
             self.headers["X-Service-Key"] = B2C_TO_B2B_KEY
 
-
-    async def reserve(self, idempotency_key: UUID, items: list[dict[str, str | int]]) -> None:
+    async def reserve(self, idempotency_key: UUID, items: list[dict[str, str | int]],
+                      order_id: UUID | None = None) -> None:
         payload = {
             "idempotency_key": str(idempotency_key),
             "items": items,
         }
+
+        if order_id is not None:
+            payload["order_id"] = str(order_id)
 
         try:
             async with httpx.AsyncClient(base_url=self.base_url, timeout=5.0) as client:
