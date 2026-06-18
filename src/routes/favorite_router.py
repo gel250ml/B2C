@@ -4,9 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.dependencies import get_db, get_current_buyer_id
 from src.services.favorite_service import FavoriteService
-from src.services.product_subscription_service import ProductSubscriptionService
 from src.schemas.catalog import PaginatedCatalogProductsResponse
-from src.schemas.product_subscription import ProductSubscriptionCreateRequest
 
 router = APIRouter(
     prefix="/favorites",
@@ -26,51 +24,6 @@ async def get_favorites(
 ) -> PaginatedCatalogProductsResponse:
     service = FavoriteService(db)
     return await service.get_favorites(buyer_id, limit, offset)
-
-
-@router.post(
-    "/{product_id}/subscribe",
-    status_code=status.HTTP_201_CREATED,
-)
-async def subscribe_to_product(
-    product_id: UUID,
-    payload: ProductSubscriptionCreateRequest,
-    buyer_id: UUID = Depends(get_current_buyer_id),
-    db: AsyncSession = Depends(get_db),
-):
-    service = ProductSubscriptionService(db)
-
-    subscription = await service.subscribe(
-        buyer_id,
-        product_id,
-        payload.events,
-    )
-
-    notify_on = []
-
-    if subscription.back_in_stock:
-        notify_on.append("BACK_IN_STOCK")
-
-    if subscription.price_drop:
-        notify_on.append("PRICE_DROP")
-
-    return {
-        "product_id": str(product_id),
-        "notify_on": notify_on,
-    }
-
-@router.delete(
-    "/{product_id}/subscribe",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def unsubscribe_from_product(
-    product_id: UUID,
-    buyer_id: UUID = Depends(get_current_buyer_id),
-    db: AsyncSession = Depends(get_db),
-) -> Response:
-    service = ProductSubscriptionService(db)
-    await service.unsubscribe(buyer_id, product_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.put(

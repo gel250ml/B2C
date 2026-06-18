@@ -17,6 +17,7 @@ from src.routes.home_router import router as home_router
 from src.routes.notification_router import router as notification_router
 from src.routes.order_router import router as order_router
 from src.routes.payment_method_router import router as payment_method_router
+from src.routes.product_subscription_router import router as product_subscription_router
 
 
 @asynccontextmanager
@@ -119,6 +120,7 @@ app.include_router(category_navigation_router, prefix="/api/v1")
 app.include_router(cart_router, prefix="/api/v1")
 app.include_router(home_router, prefix="/api/v1")
 app.include_router(favorite_router, prefix="/api/v1")
+app.include_router(product_subscription_router, prefix="/api/v1")
 app.include_router(order_router, prefix="/api/v1")
 app.include_router(notification_router, prefix="/api/v1")
 app.include_router(b2b_event_router, prefix="/api/v1")
