@@ -45,7 +45,7 @@ def _product(product_id: UUID, *, name: str = "Phone", status: str = "MODERATED"
 
 
 @pytest.mark.asyncio
-async def test_collections_list_returns_metadata_without_products(async_client, test_db):
+async def test_collections_list_returns_plain_array_with_products_field(async_client, test_db):
     today = datetime.now(UTC).date()
     first = _collection(title="New", priority=1, start_date=today - timedelta(days=1))
     second = _collection(title="Hits", priority=2, start_date=today)
@@ -54,13 +54,15 @@ async def test_collections_list_returns_metadata_without_products(async_client, 
     test_db.add_all([second, first, inactive, future])
     await test_db.commit()
 
-    response = await async_client.get("/api/v1/main/collections?limit=10&offset=0")
+    response = await async_client.get("/api/v1/catalog/collections?limit=10&offset=0")
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["metadata"] == {"total_count": 2, "limit": 10, "offset": 0}
-    assert [item["id"] for item in payload["collections"]] == [str(first.id), str(second.id)]
-    assert "products" not in payload["collections"][0]
+    assert isinstance(payload, list)
+    assert [item["id"] for item in payload] == [str(first.id), str(second.id)]
+    assert [item["name"] for item in payload] == ["New", "Hits"]
+    assert payload[0]["products"] == []
+    assert "title" not in payload[0]
 
 
 @pytest.mark.asyncio
