@@ -1,13 +1,14 @@
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.schemas.catalog import CatalogProductCardResponse
 
 
 class CollectionResponseItem(BaseModel):
     id: UUID
-    title: str
+    name: str
+    products: list[CatalogProductCardResponse] = Field(default_factory=list)
     description: str | None = None
     cover_image_url: str | None = None
     target_url: str | None = None
@@ -16,19 +17,9 @@ class CollectionResponseItem(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-class CollectionsMetadataResponse(BaseModel):
-    total_count: int
-    limit: int
-    offset: int
-
-
-class CollectionsResponse(BaseModel):
-    collections: list[CollectionResponseItem]
-    metadata: CollectionsMetadataResponse
-
-
 class CollectionProductsResponse(BaseModel):
     collection_id: UUID
+    collection_name: str
     collection_title: str
     items: list[CatalogProductCardResponse]
     unavailable_ids: list[UUID]

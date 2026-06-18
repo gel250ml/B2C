@@ -8,8 +8,6 @@ from src.repositories.collection_repository import CollectionRepository
 from src.schemas.collection import (
     CollectionProductsResponse,
     CollectionResponseItem,
-    CollectionsMetadataResponse,
-    CollectionsResponse,
 )
 from src.schemas.catalog import CatalogProductCardResponse
 from src.services.b2b_catalog_client import B2BCatalogClient
@@ -23,30 +21,23 @@ class CollectionService:
         self.b2b_client = B2BCatalogClient()
         self.catalog_service = CatalogService(session)
 
-    async def list_active_collections(self, limit: int = 10, offset: int = 0) -> CollectionsResponse:
+    async def list_active_collections(self, limit: int = 10, offset: int = 0) -> list[CollectionResponseItem]:
         normalized_limit = self._clamp(limit, 1, 100)
         normalized_offset = max(offset, 0)
-        total_count = await self.repo.count_active()
         collections = await self.repo.list_active(limit=normalized_limit, offset=normalized_offset)
 
-        return CollectionsResponse(
-            collections=[
-                CollectionResponseItem(
-                    id=collection.id,
-                    title=collection.title,
-                    description=collection.description,
-                    cover_image_url=collection.cover_image_url,
-                    target_url=collection.target_url,
-                    priority=collection.priority,
-                )
-                for collection in collections
-            ],
-            metadata=CollectionsMetadataResponse(
-                total_count=total_count,
-                limit=normalized_limit,
-                offset=normalized_offset,
-            ),
-        )
+        return [
+            CollectionResponseItem(
+                id=collection.id,
+                name=collection.title,
+                products=[],
+                description=collection.description,
+                cover_image_url=collection.cover_image_url,
+                target_url=collection.target_url,
+                priority=collection.priority,
+            )
+            for collection in collections
+        ]
 
     async def get_collection_products(
         self,
@@ -81,6 +72,7 @@ class CollectionService:
 
         return CollectionProductsResponse(
             collection_id=collection.id,
+            collection_name=collection.title,
             collection_title=collection.title,
             items=items,
             unavailable_ids=unavailable_ids,

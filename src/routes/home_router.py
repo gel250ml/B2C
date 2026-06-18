@@ -10,7 +10,7 @@ from src.schemas.banner import (
     BannerResponse,
     OpenAPIBannerResponseItem,
 )
-from src.schemas.collection import CollectionProductsResponse, CollectionsResponse
+from src.schemas.collection import CollectionProductsResponse, CollectionResponseItem
 from src.services.banner_service import BannerService
 from src.services.collection_service import CollectionService
 
@@ -19,12 +19,12 @@ router = APIRouter(tags=["Home"])
 
 
 
-@router.get("/main/collections", response_model=CollectionsResponse)
+@router.get("/catalog/collections", response_model=list[CollectionResponseItem])
 async def get_main_collections(
     limit: int = Query(default=10),
     offset: int = Query(default=0),
     db: AsyncSession = Depends(get_db),
-) -> CollectionsResponse:
+) -> list[CollectionResponseItem]:
     service = CollectionService(db)
     return await service.list_active_collections(limit=limit, offset=offset)
 
