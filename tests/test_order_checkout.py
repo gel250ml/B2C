@@ -44,8 +44,8 @@ async def test_checkout_creates_paid_order_with_fixed_prices(async_client, test_
     async def fake_get_skus(self, sku_ids):
         return {sku_id: sku_data(sku_id=sku_id, unit_price=12999000) for sku_id in sku_ids}
 
-    async def fake_reserve(self, idempotency_key, items):
-        reserve_calls.append({"idempotency_key": idempotency_key, "items": items})
+    async def fake_reserve(self, idempotency_key, items, order_id):
+        reserve_calls.append({"idempotency_key": idempotency_key, "items": items, "order_id": order_id})
 
     monkeypatch.setattr(B2BCatalogClient, "get_skus", fake_get_skus)
     monkeypatch.setattr(B2BInventoryClient, "reserve", fake_reserve)
@@ -78,6 +78,7 @@ async def test_checkout_creates_paid_order_with_fixed_prices(async_client, test_
         {
             "idempotency_key": idempotency_key,
             "items": [{"sku_id": str(SKU_ID), "quantity": 2}],
+            "order_id": UUID(body["id"]),
         }
     ]
 
@@ -98,7 +99,8 @@ async def test_partial_reserve_failure_returns_409(async_client, test_db, monkey
     async def fake_get_skus(self, sku_ids):
         return {sku_id: sku_data(sku_id=sku_id, quantity=10) for sku_id in sku_ids}
 
-    async def fake_reserve(self, idempotency_key, items):
+    async def fake_reserve(self, idempotency_key, items, order_id):
+        assert order_id is not None
         raise ReserveFailedError(failed_items)
 
     monkeypatch.setattr(B2BCatalogClient, "get_skus", fake_get_skus)
@@ -132,7 +134,8 @@ async def test_idempotency_returns_existing_order(async_client, test_db, monkeyp
     async def fake_get_skus(self, sku_ids):
         return {sku_id: sku_data(sku_id=sku_id, unit_price=500) for sku_id in sku_ids}
 
-    async def fake_reserve(self, idempotency_key, items):
+    async def fake_reserve(self, idempotency_key, items, order_id):
+        assert order_id is not None
         nonlocal reserve_calls
         reserve_calls += 1
 
@@ -166,7 +169,7 @@ async def test_b2b_unavailable_returns_503(async_client, test_db, monkeypatch):
     async def fake_get_skus(self, sku_ids):
         raise B2BUnavailableError("B2B down")
 
-    async def fake_reserve(self, idempotency_key, items):
+    async def fake_reserve(self, idempotency_key, items, order_id):
         raise AssertionError("reserve must not be called when catalog is unavailable")
 
     monkeypatch.setattr(B2BCatalogClient, "get_skus", fake_get_skus)
