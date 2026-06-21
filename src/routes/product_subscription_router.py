@@ -15,7 +15,7 @@ router = APIRouter(
 
 @router.post(
     "/{product_id}/subscribe",
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_204_NO_CONTENT,
 )
 async def subscribe_to_product(
     product_id: UUID,
@@ -24,22 +24,12 @@ async def subscribe_to_product(
     db: AsyncSession = Depends(get_db),
 ):
     service = ProductSubscriptionService(db)
-    subscription = await service.subscribe(
+    await service.subscribe(
         buyer_id=buyer_id,
         product_id=product_id,
         events=payload.events,
     )
-
-    notify_on: list[str] = []
-    if subscription.back_in_stock:
-        notify_on.append("BACK_IN_STOCK")
-    if subscription.price_drop:
-        notify_on.append("PRICE_DROP")
-
-    return {
-        "product_id": str(product_id),
-        "notify_on": notify_on,
-    }
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.delete(
