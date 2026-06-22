@@ -1,5 +1,8 @@
+from uuid import UUID
+
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.models import CartItem
 
 
@@ -9,11 +12,38 @@ class CartItemRepository:
 
     async def mark_unavailable(
         self,
-        sku_ids: list,
+        sku_ids: list[UUID],
         reason: str,
-    ):
+    ) -> None:
+        if not sku_ids:
+            return
+
         await self.session.execute(
             update(CartItem)
             .where(CartItem.sku_id.in_(sku_ids))
             .values(unavailable_reason=reason)
+        )
+
+    async def mark_unavailable_by_product_id(
+        self,
+        product_id: UUID,
+        reason: str,
+    ) -> None:
+        await self.session.execute(
+            update(CartItem)
+            .where(CartItem.product_id == product_id)
+            .values(unavailable_reason=reason)
+        )
+
+    async def clear_out_of_stock(
+        self,
+        sku_id: UUID,
+    ) -> None:
+        await self.session.execute(
+            update(CartItem)
+            .where(
+                CartItem.sku_id == sku_id,
+                CartItem.unavailable_reason == "OUT_OF_STOCK",
+            )
+            .values(unavailable_reason=None)
         )

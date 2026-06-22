@@ -255,6 +255,8 @@ async def test_sku_out_of_stock_marks_cart_items_out_of_stock(
             "occurred_at": "2026-06-01T12:00:00Z",
             "payload": {
                 "sku_id": str(sku_id),
+                "product_id": str(uuid4()),
+                "available_quantity": 0,
                 "quantity": 0,
             },
         },
@@ -265,6 +267,103 @@ async def test_sku_out_of_stock_marks_cart_items_out_of_stock(
 
     await test_db.refresh(item)
     assert item.unavailable_reason == "OUT_OF_STOCK"
+
+
+@pytest.mark.asyncio
+async def test_product_hard_blocked_marks_cart_items_unavailable(
+    async_client,
+    test_db,
+):
+    sku_id = uuid4()
+    product_id = uuid4()
+
+    cart = Cart(session_id=uuid4())
+    test_db.add(cart)
+    await test_db.flush()
+
+    item = CartItem(
+        cart_id=cart.id,
+        product_id=product_id,
+        sku_id=sku_id,
+        quantity=1,
+        unit_price_at_add=100,
+    )
+    test_db.add(item)
+    await test_db.commit()
+
+    response = await async_client.post(
+        EVENT_URL,
+        json={
+            "event_type": "PRODUCT_HARD_BLOCKED",
+            "idempotency_key": str(uuid4()),
+            "occurred_at": "2026-06-01T12:00:00Z",
+            "payload": {
+                "product_id": str(product_id),
+                "sku_ids": [str(sku_id)],
+                "reason": "hard moderation block",
+            },
+        },
+        headers=SERVICE_HEADERS,
+    )
+
+    assert response.status_code == 202
+
+    await test_db.refresh(item)
+    assert item.unavailable_reason == "PRODUCT_BLOCKED"
+
+
+@pytest.mark.asyncio
+async def test_sku_back_in_stock_clears_only_out_of_stock_reason(
+    async_client,
+    test_db,
+):
+    sku_id = uuid4()
+    product_id = uuid4()
+
+    cart = Cart(session_id=uuid4())
+    test_db.add(cart)
+    await test_db.flush()
+
+    out_of_stock_item = CartItem(
+        cart_id=cart.id,
+        product_id=product_id,
+        sku_id=sku_id,
+        quantity=1,
+        unit_price_at_add=100,
+        unavailable_reason="OUT_OF_STOCK",
+    )
+    blocked_item = CartItem(
+        cart_id=cart.id,
+        product_id=product_id,
+        sku_id=sku_id,
+        quantity=1,
+        unit_price_at_add=100,
+        unavailable_reason="PRODUCT_BLOCKED",
+    )
+    test_db.add_all([out_of_stock_item, blocked_item])
+    await test_db.commit()
+
+    response = await async_client.post(
+        EVENT_URL,
+        json={
+            "event_type": "SKU_BACK_IN_STOCK",
+            "idempotency_key": str(uuid4()),
+            "occurred_at": "2026-06-01T12:00:00Z",
+            "payload": {
+                "sku_id": str(sku_id),
+                "product_id": str(product_id),
+                "available_quantity": 5,
+            },
+        },
+        headers=SERVICE_HEADERS,
+    )
+
+    assert response.status_code == 202
+
+    await test_db.refresh(out_of_stock_item)
+    await test_db.refresh(blocked_item)
+    assert out_of_stock_item.unavailable_reason is None
+    assert blocked_item.unavailable_reason == "PRODUCT_BLOCKED"
 
 
 @pytest.mark.asyncio
